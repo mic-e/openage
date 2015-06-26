@@ -12,9 +12,9 @@ add_sources(${PROJECT_NAME}
 	args.cpp
 	game_main.cpp
 	game_save.cpp
+	game_spec.cpp
 	assetmanager.cpp
 	callbacks.cpp
-	datamanager.cpp
 	engine.cpp
 	font.cpp
 	handlers.cpp

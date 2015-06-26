@@ -16,7 +16,6 @@
 #include "coord/vec2f.h"
 #include "coord/phys3.h"
 #include "coord/window.h"
-#include "datamanager.h"
 #include "font.h"
 #include "handlers.h"
 #include "job/job_manager.h"
@@ -31,6 +30,9 @@ class DrawHandler;
 class TickHandler;
 class ResizeHandler;
 
+class GameSpec;
+class GameMain;
+
 struct coord_data {
 	coord::window window_size{800, 600};
 	coord::phys3 camgame_phys{10 * coord::settings::phys_per_tile, 10 * coord::settings::phys_per_tile, 0};
@@ -39,16 +41,22 @@ struct coord_data {
 	coord::camgame_delta tile_halfsize{48, 24};  // TODO: get from convert script
 };
 
+/**
+ * required values used to construct a game
+ * this includes game spec and players
+ *
+ * this will be identical for each networked
+ * player in a game
+ */
 struct game_settings {
-	unsigned int number_of_players;
 	int generation_seed;
 
-	// data used to create a game
-	std::shared_ptr<AssetManager> assetmanager;
-	std::shared_ptr<DataManager> datamanager;
-};
+	// TODO use vector of players
+	unsigned int number_of_players;
 
-class GameMain;
+	// data version used to create a game
+	std::shared_ptr<GameSpec> spec;
+};
 
 /**
  * main engine container.

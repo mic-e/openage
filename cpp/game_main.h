@@ -10,8 +10,8 @@
 
 #include "args.h"
 #include "assetmanager.h"
-#include "datamanager.h"
 #include "engine.h"
+#include "game_spec.h"
 #include "coord/tile.h"
 #include "handlers.h"
 #include "keybinds/keybind_manager.h"
@@ -94,9 +94,9 @@ public:
 	GameMain *game() const;
 
 	/**
-	 * data manager used by this renderer
+	 * GameSpec used by this renderer
 	 */
-	DataManager *datamanager() const;
+	GameSpec *game_spec() const;
 
 	/**
 	 * the player point of view which is being rendered

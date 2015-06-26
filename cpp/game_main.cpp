@@ -14,7 +14,6 @@
 #include "console/console.h"
 #include "coord/vec2f.h"
 #include "engine.h"
-#include "gamedata/string_resource.gen.h"
 #include "game_save.h"
 #include "keybinds/keybind_manager.h"
 #include "log/log.h"
@@ -113,17 +112,10 @@ GameMain::GameMain(const game_settings &sets)
 	:
 	settings(sets) {
 
-
-	// TODO: move this to load once in datamanager
-	util::Dir *data_dir = this->settings.assetmanager->get_data_dir();
-	util::Dir asset_dir = data_dir->append("converted");
-
-	auto string_resources = util::read_csv_file<gamedata::string_resource>(asset_dir.join("string_resources.docx"));
-	auto terrain_types  = util::read_csv_file<gamedata::terrain_type>(asset_dir.join("gamedata/gamedata-empiresdat/0000-terrains.docx"));
-	auto blending_modes = util::read_csv_file<gamedata::blending_mode>(asset_dir.join("blending_modes.docx"));
-
 	// create the terrain which will be filled by chunks
-	this->terrain = std::make_shared<Terrain>(*this->settings.assetmanager.get(), terrain_types, blending_modes, true);
+	this->terrain = std::make_shared<Terrain>(this->settings.spec->get_terrain_meta(), true);
+
+	// the initial map should be determined by game settings
 	this->terrain->fill(terrain_data, terrain_data_size);
 	this->placed_units.set_terrain(this->terrain);
 
@@ -308,9 +300,9 @@ GameRenderer::GameRenderer(openage::Engine *e)
 	});
 	this->keybind_context.bind(keybinds::action_t::TRAIN_OBJECT, [this]() {
 		// attempt to train editor selected object
-		DataManager *dm = this->datamanager();
-		if (dm->producer_count() > 0) {
-			auto type = dm->get_type_index(this->editor_current_building);
+		GameSpec *spec = this->game_spec();
+		if (spec->producer_count() > 0) {
+			auto type = spec->get_type_index(this->editor_current_building);
 			Command cmd(*this->player_focus(), type);
 			this->selection.all_invoke(cmd);
 		}
@@ -330,9 +322,9 @@ GameRenderer::GameRenderer(openage::Engine *e)
 		this->ability = ability_type::gather;
 	});
 	this->keybind_context.bind(keybinds::action_t::SPAWN_VILLAGER, [this]() {
-		DataManager *dm = this->datamanager();
-		if (this->construct_mode && dm->producer_count() > 0) {
-			UnitType &type = *dm->get_type(590);
+		GameSpec *spec = this->game_spec();
+		if (this->construct_mode && spec->producer_count() > 0) {
+			UnitType &type = *spec->get_type(590);
 			this->game()->placed_units.new_unit(type, *this->player_focus(), mousepos_tile.to_phys2().to_phys3());
 		}
 	});
@@ -489,7 +481,7 @@ bool GameRenderer::on_input(SDL_Event *e) {
 					// confirm building placement with left click
 					// first create foundation using the producer
 					UnitContainer *container = &this->engine->get_game()->placed_units;
-					UnitType *building_type = this->datamanager()->get_type_index(this->editor_current_building);
+					UnitType *building_type = this->game_spec()->get_type_index(this->editor_current_building);
 					UnitReference new_building = container->new_unit(*building_type, *this->player_focus(), mousepos_phys3);
 
 					// task all selected villagers to build
@@ -529,11 +521,11 @@ bool GameRenderer::on_input(SDL_Event *e) {
 						TerrainObject *obj = chunk->get_data(mousepos_tile)->obj[0];
 						log::log(MSG(dbg) << "delete unit with unit id " << obj->unit.id);
 						obj->unit.delete_unit();
-					} else if (this->datamanager()->producer_count() > 0) {
+					} else if (this->game_spec()->producer_count() > 0) {
 						// try creating a unit
 						log::log(MSG(dbg) << "create unit with producer id " << this->editor_current_building);
 						UnitContainer *container = &this->engine->get_game()->placed_units;
-						UnitType &type = *this->datamanager()->get_type_index(this->editor_current_building);
+						UnitType &type = *this->game_spec()->get_type_index(this->editor_current_building);
 						container->new_unit(type, *this->player_focus(), mousepos_tile.to_phys2().to_phys3());
 					}
 				} else {
@@ -575,10 +567,10 @@ bool GameRenderer::on_input(SDL_Event *e) {
 
 	case SDL_MOUSEWHEEL:
 		if (this->construct_mode) {
-			if (engine.get_keybind_manager().is_keymod_down(KMOD_LCTRL) && this->datamanager()->producer_count() > 0) {
-				editor_current_building = util::mod<ssize_t>(editor_current_building + e->wheel.y, this->datamanager()->producer_count());
+			if (engine.get_keybind_manager().is_keymod_down(KMOD_LCTRL) && this->game_spec()->producer_count() > 0) {
+				editor_current_building = util::mod<ssize_t>(editor_current_building + e->wheel.y, this->game_spec()->producer_count());
 			} else {
-				editor_current_terrain = util::mod<ssize_t>(editor_current_terrain + e->wheel.y, this->game()->terrain->terrain_id_count);
+				editor_current_terrain = util::mod<ssize_t>(editor_current_terrain + e->wheel.y, this->game_spec()->get_terrain_meta()->terrain_id_count);
 			}
 		}
 		break;
@@ -622,7 +614,7 @@ bool GameRenderer::on_draw() {
 			this->draw_debug_grid();
 		}
 
-		if (not this->datamanager()->load_complete()) {
+		if (not this->game_spec()->load_complete()) {
 			// Show that gamedata is still loading
 			engine.render_text({0, 0}, 20, "Loading gamedata...");
 		}
@@ -645,7 +637,7 @@ bool GameRenderer::on_draw() {
 	engine.render_text({x, y}, 20, mode_str.c_str());
 
 	if (this->building_placement) {
-		auto building_type = this->datamanager()->get_type_index(this->editor_current_building);
+		auto building_type = this->game_spec()->get_type_index(this->editor_current_building);
 		auto txt = building_type->default_texture();
 		auto size = building_type->foundation_size;
 		tile_range center = building_center(mousepos_tile.to_phys2().to_phys3(), size);
@@ -664,13 +656,13 @@ bool GameRenderer::on_drawhud() {
 		// draw the currently selected editor texture tile
 		game->terrain->texture(this->editor_current_terrain)->draw(coord::window{63, 84}.to_camhud(), ALPHAMASKED);
 
-		if (this->datamanager()->producer_count() > 0) {
+		if (this->game_spec()->producer_count() > 0) {
 			// and the current active building
 			coord::window bpreview_pos;
 			bpreview_pos.x = e.engine_coord_data->window_size.x - 200;
 			bpreview_pos.y = 200;
 
-			auto txt = this->datamanager()->get_type_index(this->editor_current_building)->default_texture();
+			auto txt = this->game_spec()->get_type_index(this->editor_current_building)->default_texture();
 			txt->sample(bpreview_pos.to_camhud(), engine->current_player);
 		}
 	}
@@ -732,8 +724,8 @@ GameMain *GameRenderer::game() const {
 	return this->engine->get_game();
 }
 
-DataManager *GameRenderer::datamanager() const {
-	return this->game()->get_settings()->datamanager.get();
+GameSpec *GameRenderer::game_spec() const {
+	return this->game()->get_settings()->spec.get();
 }
 
 Player *GameRenderer::player_focus() const {

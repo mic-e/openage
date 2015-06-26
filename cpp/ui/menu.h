@@ -40,6 +40,10 @@ public:
 	void render() override;
 
 private:
+
+	// access to games asset files
+	AssetManager assetmanager;
+
 	game_settings settings;
 	Element *root;
 

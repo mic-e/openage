@@ -1,21 +1,28 @@
 // Copyright 2015-2015 the openage authors. See copying.md for legal info.
 
+#include "gamedata/blending_mode.gen.h"
+#include "gamedata/string_resource.gen.h"
+#include "gamedata/terrain.gen.h"
 #include "unit/producer.h"
 #include "util/strings.h"
 #include "rng/global_rng.h"
 #include "assetmanager.h"
-#include "datamanager.h"
+#include "game_spec.h"
 #include "engine.h"
 
 namespace openage {
 
-DataManager::DataManager()
+GameSpec::GameSpec(AssetManager *am)
 	:
-	gamedata_loaded{false} {}
+	gamedata_loaded{false} {
 
-DataManager::~DataManager() {}
+	// begin loading gamedata
+	this->initialize(am);
+}
 
-void DataManager::initialize(AssetManager *am) {
+GameSpec::~GameSpec() {}
+
+void GameSpec::initialize(AssetManager *am) {
 	load_timer.start();
 
 	this->assetmanager = am;
@@ -30,7 +37,7 @@ void DataManager::initialize(AssetManager *am) {
 	this->gamedata_load_job = engine.get_job_manager()->enqueue<std::vector<gamedata::empiresdat>>(gamedata_load_function);
 }
 
-void DataManager::check_updates() {
+void GameSpec::check_updates() {
 	if (not this->gamedata_loaded and this->gamedata_load_job.is_finished()) {
 		auto gamedata = this->gamedata_load_job.get_result();
 		this->on_gamedata_loaded(gamedata);
@@ -39,19 +46,23 @@ void DataManager::check_updates() {
 	}
 }
 
-bool DataManager::load_complete() {
+bool GameSpec::load_complete() {
 	return this->gamedata_loaded;
 }
 
-size_t DataManager::producer_count() {
+terrain_meta *GameSpec::get_terrain_meta() {
+	return &this->terrain_data;
+}
+
+size_t GameSpec::producer_count() {
 	return this->available_objects.size();
 }
 
-index_t DataManager::get_slp_graphic(index_t slp) {
+index_t GameSpec::get_slp_graphic(index_t slp) {
 	return this->slp_to_graphic[slp];
 }
 
-Texture *DataManager::get_texture(index_t graphic_id) {
+Texture *GameSpec::get_texture(index_t graphic_id) {
 	if (graphic_id <= 0 || this->graphics.count(graphic_id) == 0) {
 		log::log(MSG(info) << "  -> ignoring graphics_id: " << graphic_id);
 		return nullptr;
@@ -74,7 +85,7 @@ Texture *DataManager::get_texture(index_t graphic_id) {
 	return tex;
 }
 
-std::shared_ptr<UnitTexture> DataManager::get_unit_texture(index_t unit_id) {
+std::shared_ptr<UnitTexture> GameSpec::get_unit_texture(index_t unit_id) {
 	if (this->unit_textures.count(unit_id) == 0) {
 		if (unit_id > 0) {
 			log::log(MSG(info) << "  -> ignoring unit_id: " << unit_id);
@@ -84,7 +95,7 @@ std::shared_ptr<UnitTexture> DataManager::get_unit_texture(index_t unit_id) {
 	return this->unit_textures[unit_id];
 }
 
-Sound *DataManager::get_sound(index_t sound_id) {
+Sound *GameSpec::get_sound(index_t sound_id) {
 	if (this->available_sounds.count(sound_id) == 0) {
 		if (sound_id > 0) {
 			log::log(MSG(info) << "  -> ignoring sound_id: " << sound_id);
@@ -94,7 +105,7 @@ Sound *DataManager::get_sound(index_t sound_id) {
 	return &this->available_sounds[sound_id];
 }
 
-UnitType *DataManager::get_type(index_t type_id) {
+UnitType *GameSpec::get_type(index_t type_id) {
 	if (this->producers.count(type_id) == 0) {
 		if (type_id > 0) {
 			log::log(MSG(info) << "  -> ignoring type_id: " << type_id);
@@ -104,7 +115,7 @@ UnitType *DataManager::get_type(index_t type_id) {
 	return this->producers[type_id];
 }
 
-UnitType *DataManager::get_type_index(size_t type_index) {
+UnitType *GameSpec::get_type_index(size_t type_index) {
 	if (type_index < available_objects.size()) {
 		return available_objects[type_index].get();
 	}
@@ -112,7 +123,7 @@ UnitType *DataManager::get_type_index(size_t type_index) {
 	return nullptr;
 }
 
-const gamedata::graphic *DataManager::get_graphic_data(index_t grp_id) {
+const gamedata::graphic *GameSpec::get_graphic_data(index_t grp_id) {
 	if (this->graphics.count(grp_id) == 0) {
 		log::log(MSG(info) << "  -> ignoring grp_id: " << grp_id);
 		return nullptr;
@@ -120,7 +131,7 @@ const gamedata::graphic *DataManager::get_graphic_data(index_t grp_id) {
 	return this->graphics[grp_id];
 }
 
-const gamedata::unit_building *DataManager::get_building_data(index_t unit_id) {
+const gamedata::unit_building *GameSpec::get_building_data(index_t unit_id) {
 	if (this->buildings.count(unit_id) == 0) {
 		log::log(MSG(info) << "  -> ignoring unit_id: " << unit_id);
 		return nullptr;
@@ -128,14 +139,14 @@ const gamedata::unit_building *DataManager::get_building_data(index_t unit_id) {
 	return this->buildings[unit_id];
 }
 
-std::vector<const gamedata::unit_command *> DataManager::get_command_data(index_t unit_id) {
+std::vector<const gamedata::unit_command *> GameSpec::get_command_data(index_t unit_id) {
 	if (this->commands.count(unit_id) == 0) {
 		return std::vector<const gamedata::unit_command *>(); // empty vector
 	}
 	return this->commands[unit_id];
 }
 
-void DataManager::on_gamedata_loaded(std::vector<gamedata::empiresdat> &gamedata) {
+void GameSpec::on_gamedata_loaded(std::vector<gamedata::empiresdat> &gamedata) {
 	util::Dir *data_dir = this->assetmanager->get_data_dir();
 	util::Dir asset_dir = data_dir->append("converted");
 
@@ -147,7 +158,7 @@ void DataManager::on_gamedata_loaded(std::vector<gamedata::empiresdat> &gamedata
 
 	// create complete set of unit textures
 	for (auto &g : this->graphics) {
-		this->unit_textures.insert({g.first, std::make_shared<UnitTexture>(this, g.second)});
+		this->unit_textures.insert({g.first, std::make_shared<UnitTexture>(*this, g.second)});
 	}
 
 	auto get_sound_file_location = [asset_dir](int32_t resource_id) -> std::string {
@@ -211,7 +222,7 @@ void DataManager::on_gamedata_loaded(std::vector<gamedata::empiresdat> &gamedata
 	this->create_unit_types(gamedata, your_civ_id);
 }
 
-bool DataManager::valid_graphic_id(index_t graphic_id) {
+bool GameSpec::valid_graphic_id(index_t graphic_id) {
 	if (graphic_id <= 0 || this->graphics.count(graphic_id) == 0) {
 		return false;
 	}
@@ -221,7 +232,7 @@ bool DataManager::valid_graphic_id(index_t graphic_id) {
 	return true;
 }
 
-void DataManager::load_building(const gamedata::unit_building &building, unit_type_list &list) {
+void GameSpec::load_building(const gamedata::unit_building &building, unit_type_list &list) {
 
 	// check graphics
 	if (this->valid_graphic_id(building.graphic_standing0)) {
@@ -233,7 +244,7 @@ void DataManager::load_building(const gamedata::unit_building &building, unit_ty
 	}
 }
 
-void DataManager::load_living(const gamedata::unit_living &unit, unit_type_list &list) {
+void GameSpec::load_living(const gamedata::unit_living &unit, unit_type_list &list) {
 
 	// check graphics
 	if (this->valid_graphic_id(unit.graphic_dying0) &&
@@ -243,11 +254,11 @@ void DataManager::load_living(const gamedata::unit_living &unit, unit_type_list 
 
 		auto producer_ptr = list.back().get();
 		this->producers[producer_ptr->id()] = producer_ptr;
-		
+
 	}
 }
 
-void DataManager::load_object(const gamedata::unit_object &object, unit_type_list &list) {
+void GameSpec::load_object(const gamedata::unit_object &object, unit_type_list &list) {
 
 	// check graphics
 	if (this->valid_graphic_id(object.graphic_standing0)) {
@@ -258,7 +269,7 @@ void DataManager::load_object(const gamedata::unit_object &object, unit_type_lis
 	}
 }
 
-void DataManager::load_projectile(const gamedata::unit_projectile &proj, unit_type_list &list) {
+void GameSpec::load_projectile(const gamedata::unit_projectile &proj, unit_type_list &list) {
 
 	// check graphics
 	if (this->valid_graphic_id(proj.graphic_standing0)) {
@@ -269,7 +280,60 @@ void DataManager::load_projectile(const gamedata::unit_projectile &proj, unit_ty
 	}
 }
 
-void DataManager::create_abilities(const std::vector<gamedata::empiresdat> &gamedata) {
+terrain_meta GameSpec::load_terrain(AssetManager *am) {
+	terrain_meta result;
+
+	// Terrain data files
+	util::Dir *data_dir = am->get_data_dir();
+	util::Dir asset_dir = data_dir->append("converted");
+	auto string_resources = util::read_csv_file<gamedata::string_resource>(asset_dir.join("string_resources.docx"));
+	auto terrain_meta  = util::read_csv_file<gamedata::terrain_type>(asset_dir.join("gamedata/gamedata-empiresdat/0000-terrains.docx"));
+	auto blending_meta = util::read_csv_file<gamedata::blending_mode>(asset_dir.join("blending_modes.docx"));
+
+
+	// result attributes
+	result.terrain_id_count         = terrain_meta.size();
+	result.blendmode_count          = blending_meta.size();
+	result.textures.reserve(result.terrain_id_count);
+	result.blending_masks.reserve(result.blendmode_count);
+	result.terrain_id_priority_map  = std::make_unique<int[]>(result.terrain_id_count);
+	result.terrain_id_blendmode_map = std::make_unique<int[]>(result.terrain_id_count);
+	result.influences_buf           = std::make_unique<struct influence[]>(result.terrain_id_count);
+
+
+	log::log(MSG(dbg) << "Terrain prefs: " <<
+		"tiletypes=" << result.terrain_id_count << ", "
+		"blendmodes=" << result.blendmode_count);
+
+	// create tile textures (snow, ice, grass, whatever)
+	for (size_t i = 0; i < result.terrain_id_count; i++) {
+		auto line = &terrain_meta[i];
+		terrain_t terrain_id = line->terrain_id;
+
+		// TODO: validate terrain_id < terrain_id_count
+
+		// TODO: terrain double-define check?
+		result.terrain_id_priority_map[terrain_id]  = line->blend_priority;
+		result.terrain_id_blendmode_map[terrain_id] = line->blend_mode;
+
+		// TODO: remove hardcoding and rely on nyan data
+		auto terraintex_filename = util::sformat("converted/Data/terrain.drs/%d.slp.png", line->slp_id);
+		auto new_texture = am->get_texture(terraintex_filename);
+
+		result.textures[terrain_id] = new_texture;
+	}
+
+	// create blending masks (see doc/media/blendomatic)
+	for (size_t i = 0; i < result.blendmode_count; i++) {
+		auto line = &blending_meta[i];
+
+		std::string mask_filename = util::sformat("converted/blendomatic.dat/mode%02d.png", line->blend_mode);
+		result.blending_masks[i] = am->get_texture(mask_filename);
+	}
+	return result;
+}
+
+void GameSpec::create_abilities(const std::vector<gamedata::empiresdat> &gamedata) {
 	// use game data unit commands
 	int headers =  gamedata[0].unit_headers.data.size();
 	int total = 0;
@@ -295,7 +359,7 @@ void DataManager::create_abilities(const std::vector<gamedata::empiresdat> &game
 	}
 }
 
-void DataManager::create_unit_types(const std::vector<gamedata::empiresdat> &gamedata, int your_civ_id) {
+void GameSpec::create_unit_types(const std::vector<gamedata::empiresdat> &gamedata, int your_civ_id) {
 
 	// create projectile types first
 	for (auto &obj : gamedata[0].civs.data[0].units.projectile.data) {
