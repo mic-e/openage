@@ -12,6 +12,7 @@
 
 #include "callbacks.h"
 #include "config.h"
+#include "game_main.h"
 #include "texture.h"
 #include "log/log.h"
 #include "util/color.h"
@@ -212,6 +213,10 @@ bool Engine::on_resize(coord::window new_size) {
 	return true;
 }
 
+void Engine::start_game(const game_settings &settings) {
+	this->game = std::make_unique<GameMain>(settings);
+}
+
 bool Engine::draw_debug_overlay() {
 	util::col {255, 255, 255, 255}.use();
 
@@ -273,6 +278,11 @@ void Engine::loop() {
 					}
 				}
 			}
+		}
+
+		// update any currently running game
+		if (this->game) {
+			this->game->update();
 		}
 
 		// call engine tick callback methods
@@ -352,6 +362,10 @@ void Engine::register_resize_action(ResizeHandler *handler) {
 
 util::Dir *Engine::get_data_dir() {
 	return this->data_dir;
+}
+
+GameMain *Engine::get_game() {
+	return this->game.get();
 }
 
 job::JobManager *Engine::get_job_manager() {

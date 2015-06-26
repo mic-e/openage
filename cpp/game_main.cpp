@@ -19,6 +19,7 @@
 #include "keybinds/keybind_manager.h"
 #include "log/log.h"
 #include "terrain/terrain.h"
+#include "ui/menu.h"
 #include "unit/action.h"
 #include "unit/command.h"
 #include "unit/producer.h"
@@ -95,7 +96,8 @@ int run_game(Arguments *args) {
 
 	// init the test run
 	timer.start();
-	GameMain test{&engine};
+	GameRenderer renderer{&engine};
+	ui::MainMenu test{&engine};
 
 	log::log(MSG(info).fmt("Loading time   [game]: %5.3f s", timer.getval() / 1.0e9));
 
@@ -107,7 +109,42 @@ int run_game(Arguments *args) {
 	return 0;
 }
 
-GameMain::GameMain(Engine *engine)
+GameMain::GameMain(const game_settings &sets)
+	:
+	settings(sets) {
+
+
+	// TODO: move this to load once in datamanager
+	util::Dir *data_dir = this->settings.assetmanager->get_data_dir();
+	util::Dir asset_dir = data_dir->append("converted");
+
+	auto string_resources = util::read_csv_file<gamedata::string_resource>(asset_dir.join("string_resources.docx"));
+	auto terrain_types  = util::read_csv_file<gamedata::terrain_type>(asset_dir.join("gamedata/gamedata-empiresdat/0000-terrains.docx"));
+	auto blending_modes = util::read_csv_file<gamedata::blending_mode>(asset_dir.join("blending_modes.docx"));
+
+	// create the terrain which will be filled by chunks
+	this->terrain = std::make_shared<Terrain>(*this->settings.assetmanager.get(), terrain_types, blending_modes, true);
+	this->terrain->fill(terrain_data, terrain_data_size);
+	this->placed_units.set_terrain(this->terrain);
+
+	// players
+	for (unsigned int i = 0; i < this->settings.number_of_players; ++i) {
+		this->players.emplace_back(i);
+	}
+
+}
+
+GameMain::~GameMain() {}
+
+game_settings *GameMain::get_settings() {
+	return &this->settings;
+}
+
+void GameMain::update() {
+	this->placed_units.update_all();
+}
+
+GameRenderer::GameRenderer(openage::Engine *e)
 	:
 	editor_current_terrain{0},
 	editor_current_building{0},
@@ -118,40 +155,23 @@ GameMain::GameMain(Engine *engine)
 	construct_mode{true},
 	building_placement{false},
 	use_set_ability{false},
-	assetmanager{engine->get_data_dir()},
-	engine{engine} {
-
-	// prepare data loading
-	datamanager.initialize(&assetmanager);
+	engine{e} {
 
 	// engine callbacks
 	this->engine->register_draw_action(this);
-	this->engine->register_input_action(this);
-	this->engine->register_tick_action(this);
-	this->engine->register_tick_action(&this->placed_units);
-	this->engine->register_drawhud_action(this);
-	this->engine->register_drawhud_action(&this->selection);
+	//this->engine->register_input_action(this);
+	//this->engine->register_drawhud_action(this);
+
+	//this->engine->register_tick_action(this);
+	//this->engine->register_tick_action(&this->placed_units);
+	//this->engine->register_drawhud_action(&this->selection);
+
 
 	util::Dir *data_dir = engine->get_data_dir();
 	util::Dir asset_dir = data_dir->append("converted");
 
 	// load textures and stuff
 	gaben      = new Texture{data_dir->join("gaben.png")};
-
-	auto string_resources = util::read_csv_file<gamedata::string_resource>(asset_dir.join("string_resources.docx"));
-	auto terrain_types  = util::read_csv_file<gamedata::terrain_type>(asset_dir.join("gamedata/gamedata-empiresdat/0000-terrains.docx"));
-	auto blending_modes = util::read_csv_file<gamedata::blending_mode>(asset_dir.join("blending_modes.docx"));
-
-	// create the terrain which will be filled by chunks
-	this->terrain = std::make_shared<Terrain>(assetmanager, terrain_types, blending_modes, true);
-	this->terrain->fill(terrain_data, terrain_data_size);
-	this->placed_units.set_terrain(this->terrain);
-
-	// players
-	unsigned int number_of_players = 8;
-	for (unsigned int i = 0; i < number_of_players; ++i) {
-		this->players.emplace_back(i);
-	}
 
 	auto player_color_lines = util::read_csv_file<gamedata::palette_color>(asset_dir.join("player_palette_50500.docx"));
 
@@ -261,10 +281,10 @@ GameMain::GameMain(Engine *engine)
 		this->debug_grid_active = !this->debug_grid_active;
 	});
 	global_keybind_context.bind(keybinds::action_t::QUICK_SAVE, [this]() {
-		gameio::save(this, "default_save.txt");
+		gameio::save(this->engine->get_game(), "default_save.txt");
 	});
 	global_keybind_context.bind(keybinds::action_t::QUICK_LOAD, [this]() {
-		gameio::load(this, "default_save.txt");
+		gameio::load(this->engine->get_game(), "default_save.txt");
 	});
 	global_keybind_context.bind(keybinds::action_t::TOGGLE_PROFILER, [this]() {
 		if (this->external_profiler.currently_profiling) {
@@ -277,7 +297,8 @@ GameMain::GameMain(Engine *engine)
 
 	// Local keybinds
 	this->keybind_context.bind(keybinds::action_t::TOGGLE_BLENDING, [this]() {
-		this->terrain->blending_enabled = !terrain->blending_enabled;
+		Terrain *terrain = this->engine->get_game()->terrain.get();
+		terrain->blending_enabled = !terrain->blending_enabled;
 	});
 	this->keybind_context.bind(keybinds::action_t::TOGGLE_CONSTRUCT_MODE, [this]() {
 		this->construct_mode = !this->construct_mode;
@@ -287,9 +308,10 @@ GameMain::GameMain(Engine *engine)
 	});
 	this->keybind_context.bind(keybinds::action_t::TRAIN_OBJECT, [this]() {
 		// attempt to train editor selected object
-		if ( this->datamanager.producer_count() > 0 ) {
-			auto type = this->datamanager.get_type_index(this->editor_current_building);
-			Command cmd(this->players[this->engine->current_player - 1], type);
+		DataManager *dm = this->datamanager();
+		if (dm->producer_count() > 0) {
+			auto type = dm->get_type_index(this->editor_current_building);
+			Command cmd(*this->player_focus(), type);
 			this->selection.all_invoke(cmd);
 		}
 	});
@@ -308,9 +330,10 @@ GameMain::GameMain(Engine *engine)
 		this->ability = ability_type::gather;
 	});
 	this->keybind_context.bind(keybinds::action_t::SPAWN_VILLAGER, [this]() {
-		if (this->construct_mode && this->datamanager.producer_count() > 0) {
-			UnitType &type = *this->datamanager.get_type(590);
-			this->placed_units.new_unit(type, this->players[this->engine->current_player - 1], mousepos_tile.to_phys2().to_phys3());
+		DataManager *dm = this->datamanager();
+		if (this->construct_mode && dm->producer_count() > 0) {
+			UnitType &type = *dm->get_type(590);
+			this->game()->placed_units.new_unit(type, *this->player_focus(), mousepos_tile.to_phys2().to_phys3());
 		}
 	});
 	this->keybind_context.bind(keybinds::action_t::KILL_UNIT, [this]() {
@@ -354,9 +377,10 @@ GameMain::GameMain(Engine *engine)
 	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_8, 8);
 
 	engine->get_keybind_manager().register_context(&this->keybind_context);
+
 }
 
-GameMain::~GameMain() {
+GameRenderer::~GameRenderer() {
 	// oh noes, release hl3 before that!
 	delete this->gaben;
 
@@ -365,8 +389,34 @@ GameMain::~GameMain() {
 	delete alphamask_shader::program;
 }
 
+void GameRenderer::move_camera() {
+	Engine &engine = Engine::get();
+	// read camera movement input keys, and move camera
+	// accordingly.
 
-bool GameMain::on_input(SDL_Event *e) {
+	// camera movement speed, in pixels per millisecond
+	// one pixel per millisecond equals 14.3 tiles/second
+	float mov_x = 0.0, mov_y = 0.0, cam_movement_speed_keyboard = 0.5;
+
+	keybinds::KeybindManager &keybinds = engine.get_keybind_manager();
+
+	if (keybinds.is_key_down(SDLK_LEFT)) {
+		mov_x = -cam_movement_speed_keyboard;
+	}
+	if (keybinds.is_key_down(SDLK_RIGHT)) {
+		mov_x = cam_movement_speed_keyboard;
+	}
+	if (keybinds.is_key_down(SDLK_DOWN)) {
+		mov_y = cam_movement_speed_keyboard;
+	}
+	if (keybinds.is_key_down(SDLK_UP)) {
+		mov_y = -cam_movement_speed_keyboard;
+	}
+
+	engine.move_phys_camera(mov_x, mov_y, (float) engine.lastframe_duration_nsec() / 1e6);
+}
+
+bool GameRenderer::on_input(SDL_Event *e) {
 	Engine &engine = Engine::get();
 
 	switch (e->type) {
@@ -405,12 +455,13 @@ bool GameMain::on_input(SDL_Event *e) {
 		// more suitable for converting camgame to phys3
 		this->mousepos_phys3 = mousepos_camgame.to_phys3();
 		this->mousepos_tile = mousepos_phys3.to_tile3().to_tile();
+		Terrain *terrain = this->game()->terrain.get();
 
 		switch (e->button.button) {
 
 		case SDL_BUTTON_LEFT:
 			if (this->dragging_active) { // Stop dragging
-				selection.drag_release(terrain.get(), this->engine->get_keybind_manager().is_keymod_down(KMOD_LCTRL));
+				selection.drag_release(terrain, this->engine->get_keybind_manager().is_keymod_down(KMOD_LCTRL));
 				dragging_active = false;
 			} else if (clicking_active) {
 				if (construct_mode) {
@@ -437,13 +488,13 @@ bool GameMain::on_input(SDL_Event *e) {
 				} else if (this->building_placement) {
 					// confirm building placement with left click
 					// first create foundation using the producer
-					UnitContainer *container = &this->placed_units;
-					UnitType *building_type = this->datamanager.get_type_index(this->editor_current_building);
-					UnitReference new_building = container->new_unit(*building_type, this->players[engine.current_player - 1], mousepos_phys3);
+					UnitContainer *container = &this->engine->get_game()->placed_units;
+					UnitType *building_type = this->datamanager()->get_type_index(this->editor_current_building);
+					UnitReference new_building = container->new_unit(*building_type, *this->player_focus(), mousepos_phys3);
 
 					// task all selected villagers to build
 					if (new_building.is_valid()) {
-						Command cmd(this->players[engine.current_player - 1], new_building.get());
+						Command cmd(*this->player_focus(), new_building.get());
 						cmd.set_ability(ability_type::build);
 						this->selection.all_invoke(cmd);
 					}
@@ -478,11 +529,12 @@ bool GameMain::on_input(SDL_Event *e) {
 						TerrainObject *obj = chunk->get_data(mousepos_tile)->obj[0];
 						log::log(MSG(dbg) << "delete unit with unit id " << obj->unit.id);
 						obj->unit.delete_unit();
-					} else if ( this->datamanager.producer_count() > 0 ) {
+					} else if (this->datamanager()->producer_count() > 0) {
 						// try creating a unit
 						log::log(MSG(dbg) << "create unit with producer id " << this->editor_current_building);
-						UnitType &type = *this->datamanager.get_type_index(this->editor_current_building);
-						this->placed_units.new_unit(type, this->players[engine.current_player - 1], mousepos_tile.to_phys2().to_phys3());
+						UnitContainer *container = &this->engine->get_game()->placed_units;
+						UnitType &type = *this->datamanager()->get_type_index(this->editor_current_building);
+						container->new_unit(type, *this->player_focus(), mousepos_tile.to_phys2().to_phys3());
 					}
 				} else {
 					// right click can cancel building placement
@@ -523,10 +575,10 @@ bool GameMain::on_input(SDL_Event *e) {
 
 	case SDL_MOUSEWHEEL:
 		if (this->construct_mode) {
-			if (engine.get_keybind_manager().is_keymod_down(KMOD_LCTRL) && this->datamanager.producer_count() > 0) {
-				editor_current_building = util::mod<ssize_t>(editor_current_building + e->wheel.y, this->datamanager.producer_count());
+			if (engine.get_keybind_manager().is_keymod_down(KMOD_LCTRL) && this->datamanager()->producer_count() > 0) {
+				editor_current_building = util::mod<ssize_t>(editor_current_building + e->wheel.y, this->datamanager()->producer_count());
 			} else {
-				editor_current_terrain = util::mod<ssize_t>(editor_current_terrain + e->wheel.y, this->terrain->terrain_id_count);
+				editor_current_terrain = util::mod<ssize_t>(editor_current_terrain + e->wheel.y, this->game()->terrain->terrain_id_count);
 			}
 		}
 		break;
@@ -553,57 +605,27 @@ bool GameMain::on_input(SDL_Event *e) {
 	return true;
 }
 
-void GameMain::move_camera() {
+bool GameRenderer::on_draw() {
 	Engine &engine = Engine::get();
-	// read camera movement input keys, and move camera
-	// accordingly.
-
-	// camera movement speed, in pixels per millisecond
-	// one pixel per millisecond equals 14.3 tiles/second
-	float mov_x = 0.0, mov_y = 0.0, cam_movement_speed_keyboard = 0.5;
-
-	keybinds::KeybindManager &keybinds = engine.get_keybind_manager();
-
-	if (keybinds.is_key_down(SDLK_LEFT)) {
-		mov_x = -cam_movement_speed_keyboard;
-	}
-	if (keybinds.is_key_down(SDLK_RIGHT)) {
-		mov_x = cam_movement_speed_keyboard;
-	}
-	if (keybinds.is_key_down(SDLK_DOWN)) {
-		mov_y = cam_movement_speed_keyboard;
-	}
-	if (keybinds.is_key_down(SDLK_UP)) {
-		mov_y = -cam_movement_speed_keyboard;
-	}
-
-	engine.move_phys_camera(mov_x, mov_y, (float) engine.lastframe_duration_nsec() / 1e6);
-}
-
-
-bool GameMain::on_tick() {
-	this->move_camera();
-	assetmanager.check_updates();
-	datamanager.check_updates();
-	return true;
-}
-
-bool GameMain::on_draw() {
-	Engine &engine = Engine::get();
-
-	// draw gaben, our great and holy protector, bringer of the half-life 3.
-	gaben->draw(coord::camgame{0, 0});
 
 	// draw terrain
-	terrain->draw(&engine);
+	GameMain *game = engine.get_game();
+	if (game) {
+		this->move_camera();
 
-	if (this->debug_grid_active) {
-		this->draw_debug_grid();
-	}
+		// draw gaben, our great and holy protector, bringer of the half-life 3.
+		gaben->draw(coord::camgame{0, 0});
 
-	if (not this->datamanager.load_complete()) {
-		// Show that gamedata is still loading
-		engine.render_text({0, 0}, 20, "Loading gamedata...");
+		game->terrain->draw(&engine);
+
+		if (this->debug_grid_active) {
+			this->draw_debug_grid();
+		}
+
+		if (not this->datamanager()->load_complete()) {
+			// Show that gamedata is still loading
+			engine.render_text({0, 0}, 20, "Loading gamedata...");
+		}
 	}
 
 	// draw construction or actions mode indicator
@@ -623,7 +645,7 @@ bool GameMain::on_draw() {
 	engine.render_text({x, y}, 20, mode_str.c_str());
 
 	if (this->building_placement) {
-		auto building_type = this->datamanager.get_type_index(this->editor_current_building);
+		auto building_type = this->datamanager()->get_type_index(this->editor_current_building);
 		auto txt = building_type->default_texture();
 		auto size = building_type->foundation_size;
 		tile_range center = building_center(mousepos_tile.to_phys2().to_phys3(), size);
@@ -633,28 +655,29 @@ bool GameMain::on_draw() {
 	return true;
 }
 
-bool GameMain::on_drawhud() {
+bool GameRenderer::on_drawhud() {
 	Engine &e = Engine::get();
+	GameMain *game = this->game();
 
-	if (this->construct_mode) {
+	if (this->construct_mode && game) {
 
 		// draw the currently selected editor texture tile
-		this->terrain->texture(this->editor_current_terrain)->draw(coord::window{63, 84}.to_camhud(), ALPHAMASKED);
+		game->terrain->texture(this->editor_current_terrain)->draw(coord::window{63, 84}.to_camhud(), ALPHAMASKED);
 
-		if (this->datamanager.producer_count() > 0) {
+		if (this->datamanager()->producer_count() > 0) {
 			// and the current active building
 			coord::window bpreview_pos;
 			bpreview_pos.x = e.engine_coord_data->window_size.x - 200;
 			bpreview_pos.y = 200;
 
-			auto txt = this->datamanager.get_type_index(this->editor_current_building)->default_texture();
+			auto txt = this->datamanager()->get_type_index(this->editor_current_building)->default_texture();
 			txt->sample(bpreview_pos.to_camhud(), engine->current_player);
 		}
 	}
 	return true;
 }
 
-void GameMain::draw_debug_grid() {
+void GameRenderer::draw_debug_grid() {
 	Engine &e = Engine::get();
 
 	coord::camgame camera = coord::tile{0, 0}.to_tile3().to_phys3().to_camgame();
@@ -705,23 +728,35 @@ void GameMain::draw_debug_grid() {
 
 }
 
-Command GameMain::get_action(const coord::phys3 &pos) const {
-	auto obj = this->terrain->obj_at_point(pos);
+GameMain *GameRenderer::game() const {
+	return this->engine->get_game();
+}
+
+DataManager *GameRenderer::datamanager() const {
+	return this->game()->get_settings()->datamanager.get();
+}
+
+Player *GameRenderer::player_focus() const {
+	return &this->game()->players[this->engine->current_player - 1];
+}
+
+Command GameRenderer::get_action(const coord::phys3 &pos) const {
+	GameMain *game = this->engine->get_game();
+	auto obj = game->terrain->obj_at_point(pos);
 	if (obj) {
-		Command c(this->players[engine->current_player - 1], &obj->unit, pos);
+		Command c(*this->player_focus(), &obj->unit, pos);
 		if (this->use_set_ability) {
 			c.set_ability(ability);
 		}
 		return c;
 	}
 	else {
-		Command c(this->players[engine->current_player - 1], pos);
+		Command c(*this->player_focus(), pos);
 		if (this->use_set_ability) {
 			c.set_ability(ability);
 		}
 		return c;
 	}
-
 }
 
 } //namespace openage

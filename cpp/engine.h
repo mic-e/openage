@@ -16,6 +16,7 @@
 #include "coord/vec2f.h"
 #include "coord/phys3.h"
 #include "coord/window.h"
+#include "datamanager.h"
 #include "font.h"
 #include "handlers.h"
 #include "job/job_manager.h"
@@ -36,6 +37,15 @@ struct coord_data {
 	coord::window camgame_window{400, 300};
 	coord::window camhud_window{0, 600};
 	coord::camgame_delta tile_halfsize{48, 24};  // TODO: get from convert script
+};
+
+struct game_settings {
+	unsigned int number_of_players;
+	int generation_seed;
+
+	// data used to create a game
+	std::shared_ptr<AssetManager> assetmanager;
+	std::shared_ptr<DataManager> datamanager;
 };
 
 class GameMain;
@@ -131,6 +141,8 @@ public:
 	 */
 	bool on_resize(coord::window new_size);
 
+	void start_game(const game_settings &settings);
+
 	/**
 	 * draw the current frames per second number on screen.
 	 * save the current framebuffer to a given png file.
@@ -172,6 +184,12 @@ public:
 	 * return the data directory where the engine was started from.
 	 */
 	util::Dir *get_data_dir();
+
+	/**
+	 * return currently running game or null if a game is not
+	 * currently running
+	 */
+	GameMain *get_game();
 
 	/**
 	 * return this engine's job manager.
@@ -280,6 +298,11 @@ private:
 	 * list of handlers that are executed upon a resize event.
 	 */
 	std::vector<ResizeHandler *> on_resize_handler;
+
+	/**
+	 * the currently running game
+	 */
+	std::unique_ptr<GameMain> game;
 
 	/**
 	 * the frame counter measuring fps.

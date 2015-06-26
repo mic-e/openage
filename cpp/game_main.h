@@ -35,18 +35,50 @@ int run_game(openage::Arguments *args);
 void gametest_init(openage::Engine *engine);
 void gametest_destroy();
 
-class GameMain :
+/**
+ * Contains information for a single game
+ * TODO: include a list of actions to be saved
+ *       as the game replay file
+ */
+class GameMain {
+public:
+	GameMain(const game_settings &sets);
+	~GameMain();
+
+	game_settings *get_settings();
+
+	void update();
+
+	/**
+	 * map information
+	 */
+	std::shared_ptr<Terrain> terrain;
+
+	/**
+	 * all players in the game
+	 */
+	std::vector<Player> players;
+
+	/**
+	 * all the objects that have been placed.
+	 */
+	UnitContainer placed_units;
+
+private:
+	game_settings settings;
+
+};
+
+class GameRenderer :
 		openage::InputHandler,
 		openage::DrawHandler,
-		openage::HudHandler,
-		openage::TickHandler {
+		openage::HudHandler {
 public:
-	GameMain(openage::Engine *engine);
-	~GameMain();
+	GameRenderer(openage::Engine *e);
+	~GameRenderer();
 
 	void move_camera();
 
-	bool on_tick() override;
 	bool on_draw() override;
 	bool on_drawhud() override;
 	bool on_input(SDL_Event *e) override;
@@ -55,6 +87,25 @@ public:
 	 * debug function that draws a simple overlay grid
 	 */
 	void draw_debug_grid();
+
+	/**
+	 * the game this renderer is using
+	 */
+	GameMain *game() const;
+
+	/**
+	 * data manager used by this renderer
+	 */
+	DataManager *datamanager() const;
+
+	/**
+	 * the player point of view which is being rendered
+	 */
+	Player *player_focus() const;
+
+	// ui components
+	UnitSelection selection;
+	Texture *gaben;
 
 	// currently selected terrain id
 	openage::terrain_t editor_current_terrain;
@@ -74,23 +125,12 @@ public:
 	coord::phys3 mousepos_phys3;
 	coord::tile mousepos_tile;
 
-	UnitSelection selection;
-	std::shared_ptr<Terrain> terrain;
-	Texture *gaben;
-	std::vector<Player> players;
-
-	/**
-	 * all the objects that have been placed.
-	 */
-	UnitContainer placed_units;
-
-	AssetManager assetmanager;
-	DataManager datamanager;
-
 	keybinds::KeybindContext keybind_context;
 
 	util::ExternalProfiler external_profiler;
+
 private:
+	openage::Engine *engine;
 
 	/**
 	 * decides which type of right mouse click command to issue based on position
@@ -100,7 +140,6 @@ private:
 	 */
 	Command get_action(const coord::phys3 &pos) const;
 
-	openage::Engine *engine;
 };
 
 } //namespace openage
