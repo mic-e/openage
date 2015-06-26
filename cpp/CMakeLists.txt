@@ -11,6 +11,7 @@ add_sources(${PROJECT_NAME}
 	main.cpp
 	args.cpp
 	game_main.cpp
+	game_renderer.cpp
 	game_save.cpp
 	game_spec.cpp
 	assetmanager.cpp

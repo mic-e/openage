@@ -1,5 +1,6 @@
 // Copyright 2015-2015 the openage authors. See copying.md for legal info.
 
+#include "../game_spec.h"
 #include "menu.h"
 
 namespace openage {

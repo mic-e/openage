@@ -192,7 +192,11 @@ private:
 	void load_living(const gamedata::unit_living &, unit_type_list &);
 	void load_object(const gamedata::unit_object &, unit_type_list &);
 	void load_projectile(const gamedata::unit_projectile &, unit_type_list &);
-	terrain_meta load_terrain(AssetManager *am);
+
+	/**
+	 * fill in the terrain_data attribute of this
+	 */
+	void load_terrain(AssetManager *am);
 
 	/**
 	 * has game data been load yet

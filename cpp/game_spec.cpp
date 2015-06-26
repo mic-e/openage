@@ -25,6 +25,8 @@ GameSpec::~GameSpec() {}
 void GameSpec::initialize(AssetManager *am) {
 	load_timer.start();
 
+	this->load_terrain(am);
+
 	this->assetmanager = am;
 	auto gamedata_load_function = [this]() -> std::vector<gamedata::empiresdat> {
 		log::log(MSG(info) << "loading game specification files... stand by, will be faster soon...");
@@ -280,8 +282,7 @@ void GameSpec::load_projectile(const gamedata::unit_projectile &proj, unit_type_
 	}
 }
 
-terrain_meta GameSpec::load_terrain(AssetManager *am) {
-	terrain_meta result;
+void GameSpec::load_terrain(AssetManager *am) {
 
 	// Terrain data files
 	util::Dir *data_dir = am->get_data_dir();
@@ -292,45 +293,44 @@ terrain_meta GameSpec::load_terrain(AssetManager *am) {
 
 
 	// result attributes
-	result.terrain_id_count         = terrain_meta.size();
-	result.blendmode_count          = blending_meta.size();
-	result.textures.reserve(result.terrain_id_count);
-	result.blending_masks.reserve(result.blendmode_count);
-	result.terrain_id_priority_map  = std::make_unique<int[]>(result.terrain_id_count);
-	result.terrain_id_blendmode_map = std::make_unique<int[]>(result.terrain_id_count);
-	result.influences_buf           = std::make_unique<struct influence[]>(result.terrain_id_count);
+	terrain_data.terrain_id_count         = terrain_meta.size();
+	terrain_data.blendmode_count          = blending_meta.size();
+	terrain_data.textures.reserve(terrain_data.terrain_id_count);
+	terrain_data.blending_masks.reserve(terrain_data.blendmode_count);
+	terrain_data.terrain_id_priority_map  = std::make_unique<int[]>(terrain_data.terrain_id_count);
+	terrain_data.terrain_id_blendmode_map = std::make_unique<int[]>(terrain_data.terrain_id_count);
+	terrain_data.influences_buf           = std::make_unique<struct influence[]>(terrain_data.terrain_id_count);
 
 
 	log::log(MSG(dbg) << "Terrain prefs: " <<
-		"tiletypes=" << result.terrain_id_count << ", "
-		"blendmodes=" << result.blendmode_count);
+		"tiletypes=" << terrain_data.terrain_id_count << ", "
+		"blendmodes=" << terrain_data.blendmode_count);
 
 	// create tile textures (snow, ice, grass, whatever)
-	for (size_t i = 0; i < result.terrain_id_count; i++) {
+	for (size_t i = 0; i < terrain_data.terrain_id_count; i++) {
 		auto line = &terrain_meta[i];
 		terrain_t terrain_id = line->terrain_id;
 
 		// TODO: validate terrain_id < terrain_id_count
 
 		// TODO: terrain double-define check?
-		result.terrain_id_priority_map[terrain_id]  = line->blend_priority;
-		result.terrain_id_blendmode_map[terrain_id] = line->blend_mode;
+		terrain_data.terrain_id_priority_map[terrain_id]  = line->blend_priority;
+		terrain_data.terrain_id_blendmode_map[terrain_id] = line->blend_mode;
 
 		// TODO: remove hardcoding and rely on nyan data
 		auto terraintex_filename = util::sformat("converted/Data/terrain.drs/%d.slp.png", line->slp_id);
 		auto new_texture = am->get_texture(terraintex_filename);
 
-		result.textures[terrain_id] = new_texture;
+		terrain_data.textures[terrain_id] = new_texture;
 	}
 
 	// create blending masks (see doc/media/blendomatic)
-	for (size_t i = 0; i < result.blendmode_count; i++) {
+	for (size_t i = 0; i < terrain_data.blendmode_count; i++) {
 		auto line = &blending_meta[i];
 
 		std::string mask_filename = util::sformat("converted/blendomatic.dat/mode%02d.png", line->blend_mode);
-		result.blending_masks[i] = am->get_texture(mask_filename);
+		terrain_data.blending_masks[i] = am->get_texture(mask_filename);
 	}
-	return result;
 }
 
 void GameSpec::create_abilities(const std::vector<gamedata::empiresdat> &gamedata) {

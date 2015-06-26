@@ -8,6 +8,7 @@
 #include "unit/unit_type.h"
 #include "game_main.h"
 #include "game_save.h"
+#include "game_spec.h"
 
 namespace openage {
 namespace gameio {

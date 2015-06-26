@@ -26,6 +26,8 @@ private:
 
 /**
  * connects the ui system with the game engine
+ * switches between contexts such as editor mode and
+ * action mode
  */
 class MainMenu :
 		public Element,
