@@ -368,6 +368,13 @@ GameMain *Engine::get_game() {
 	return this->game.get();
 }
 
+Player *Engine::player_focus() const {
+	if (this->game) {
+		return &this->game->players[this->current_player - 1];
+	}
+	return nullptr;
+}
+
 job::JobManager *Engine::get_job_manager() {
 	return this->job_manager;
 }

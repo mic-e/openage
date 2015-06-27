@@ -9,11 +9,10 @@
 #include <unistd.h>
 
 #include "args.h"
-
 #include "console/console.h"
 #include "log/log.h"
-#include "ui/menu.h"
 #include "util/error.h"
+#include "game_control.h"
 #include "game_main.h"
 #include "game_renderer.h"
 #include "testing/testing.h"
@@ -54,7 +53,7 @@ int run_game(Arguments *args) {
 	// init the test run
 	timer.start();
 	GameRenderer renderer{&engine};
-	ui::MainMenu test{&engine};
+	GameControl control{&engine};
 
 	log::log(MSG(info).fmt("Loading time   [game]: %5.3f s", timer.getval() / 1.0e9));
 

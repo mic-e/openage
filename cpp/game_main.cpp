@@ -30,10 +30,8 @@ constexpr int terrain_data[16 * 16] = {
 
 GameMain::GameMain(const game_settings &sets)
 	:
+	terrain{std::make_shared<Terrain>(sets.spec->get_terrain_meta(), true)},
 	settings(sets) {
-
-	// create the terrain which will be filled by chunks
-	this->terrain = std::make_shared<Terrain>(this->settings.spec->get_terrain_meta(), true);
 
 	// the initial map should be determined by game settings
 	this->terrain->fill(terrain_data, terrain_data_size);
@@ -50,6 +48,10 @@ GameMain::~GameMain() {}
 
 game_settings *GameMain::get_settings() {
 	return &this->settings;
+}
+
+GameSpec *GameMain::get_spec() {
+	return this->settings.spec.get();
 }
 
 void GameMain::update() {

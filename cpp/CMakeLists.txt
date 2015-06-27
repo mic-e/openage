@@ -10,6 +10,7 @@ declare_executable(${PROJECT_NAME})
 add_sources(${PROJECT_NAME}
 	main.cpp
 	args.cpp
+	game_control.cpp
 	game_main.cpp
 	game_renderer.cpp
 	game_save.cpp
@@ -41,7 +42,6 @@ add_subdirectory("pathfinding")
 add_subdirectory("shader")
 add_subdirectory("terrain")
 add_subdirectory("testing")
-add_subdirectory("ui")
 add_subdirectory("unit")
 add_subdirectory("util")
 add_subdirectory("rng")

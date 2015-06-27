@@ -6,24 +6,19 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "args.h"
-#include "audio/sound.h"
-#include "callbacks.h"
 #include "console/console.h"
 #include "coord/vec2f.h"
 #include "engine.h"
-#include "game_save.h"
+#include "game_main.h"
 #include "game_spec.h"
 #include "keybinds/keybind_manager.h"
 #include "log/log.h"
 #include "terrain/terrain.h"
-#include "ui/menu.h"
 #include "unit/action.h"
 #include "unit/command.h"
 #include "unit/producer.h"
 #include "unit/unit.h"
 #include "unit/unit_texture.h"
-#include "util/strings.h"
 #include "util/timer.h"
 #include "util/externalprofiler.h"
 
@@ -33,32 +28,19 @@ namespace openage {
 
 GameRenderer::GameRenderer(openage::Engine *e)
 	:
-	editor_current_terrain{0},
-	editor_current_building{0},
 	debug_grid_active{false},
-	clicking_active{true},
-	scrolling_active{false},
-	dragging_active{false},
-	construct_mode{true},
-	building_placement{false},
-	use_set_ability{false},
 	engine{e} {
 
 	// engine callbacks
 	this->engine->register_draw_action(this);
-	this->engine->register_input_action(this);
-	this->engine->register_drawhud_action(this);
-	this->engine->register_drawhud_action(&this->selection);
-
 
 	util::Dir *data_dir = engine->get_data_dir();
 	util::Dir asset_dir = data_dir->append("converted");
 
 	// load textures and stuff
-	gaben      = new Texture{data_dir->join("gaben.png")};
+	gaben = new Texture{data_dir->join("gaben.png")};
 
 	auto player_color_lines = util::read_csv_file<gamedata::palette_color>(asset_dir.join("player_palette_50500.docx"));
-
 	GLfloat *playercolors = new GLfloat[player_color_lines.size() * 4];
 	for (size_t i = 0; i < player_color_lines.size(); i++) {
 		auto line = &player_color_lines[i];
@@ -146,122 +128,25 @@ GameRenderer::GameRenderer(openage::Engine *e)
 	delete alphamask_vert;
 	delete alphamask_frag;
 
-	// initialize global keybinds
+	// Renderer keybinds
+	// TODO: a renderer settings struct
+	// would allow these to be put somewher better
 	auto &global_keybind_context = engine->get_keybind_manager().get_global_keybind_context();
-
-	global_keybind_context.bind(keybinds::action_t::STOP_GAME, [this]() {
-		this->engine->stop();
-	});
-	global_keybind_context.bind(keybinds::action_t::TOGGLE_HUD, [this]() {
-		this->engine->drawing_huds = !this->engine->drawing_huds;
-	});
-	global_keybind_context.bind(keybinds::action_t::SCREENSHOT, [this]() {
-		this->engine->get_screenshot_manager().save_screenshot();
-	});
-	global_keybind_context.bind(keybinds::action_t::TOGGLE_DEBUG_OVERLAY, [this]() {
-		this->engine->drawing_debug_overlay = !this->engine->drawing_debug_overlay;
-	});
 	global_keybind_context.bind(keybinds::action_t::TOGGLE_DEBUG_GRID, [this]() {
 		this->debug_grid_active = !this->debug_grid_active;
 	});
-	global_keybind_context.bind(keybinds::action_t::QUICK_SAVE, [this]() {
-		gameio::save(this->engine->get_game(), "default_save.txt");
-	});
-	global_keybind_context.bind(keybinds::action_t::QUICK_LOAD, [this]() {
-		gameio::load(this->engine->get_game(), "default_save.txt");
-	});
-	global_keybind_context.bind(keybinds::action_t::TOGGLE_PROFILER, [this]() {
-		if (this->external_profiler.currently_profiling) {
-			this->external_profiler.stop();
-			this->external_profiler.show_results();
-		} else {
-			this->external_profiler.start();
+	global_keybind_context.bind(keybinds::action_t::TOGGLE_BLENDING, [this]() {
+		GameMain *game = this->engine->get_game();
+		if (game && game->terrain) {
+			Terrain *terrain = game->terrain.get();
+			terrain->blending_enabled = !terrain->blending_enabled;
 		}
 	});
-
-	// Local keybinds
-	this->keybind_context.bind(keybinds::action_t::TOGGLE_BLENDING, [this]() {
-		Terrain *terrain = this->engine->get_game()->terrain.get();
-		terrain->blending_enabled = !terrain->blending_enabled;
-	});
-	this->keybind_context.bind(keybinds::action_t::TOGGLE_CONSTRUCT_MODE, [this]() {
-		this->construct_mode = !this->construct_mode;
-	});
-	this->keybind_context.bind(keybinds::action_t::TOGGLE_UNIT_DEBUG, [this]() {
+	global_keybind_context.bind(keybinds::action_t::TOGGLE_UNIT_DEBUG, [this]() {
 		UnitAction::show_debug = !UnitAction::show_debug;
 	});
-	this->keybind_context.bind(keybinds::action_t::TRAIN_OBJECT, [this]() {
-		// attempt to train editor selected object
-		GameSpec *spec = this->game_spec();
-		if (spec->producer_count() > 0) {
-			auto type = spec->get_type_index(this->editor_current_building);
-			Command cmd(*this->player_focus(), type);
-			this->selection.all_invoke(cmd);
-		}
-	});
-	this->keybind_context.bind(keybinds::action_t::ENABLE_BUILDING_PLACEMENT, [this]() {
-		this->building_placement = true;
-	});
-	this->keybind_context.bind(keybinds::action_t::DISABLE_SET_ABILITY, [this]() {
-		this->use_set_ability = false;
-	});
-	this->keybind_context.bind(keybinds::action_t::SET_ABILITY_MOVE, [this]() {
-		this->use_set_ability = true;
-		this->ability = ability_type::move;
-	});
-	this->keybind_context.bind(keybinds::action_t::SET_ABILITY_GATHER, [this]() {
-		this->use_set_ability = true;
-		this->ability = ability_type::gather;
-	});
-	this->keybind_context.bind(keybinds::action_t::SPAWN_VILLAGER, [this]() {
-		GameSpec *spec = this->game_spec();
-		if (this->construct_mode && spec->producer_count() > 0) {
-			UnitType &type = *spec->get_type(590);
-			this->game()->placed_units.new_unit(type, *this->player_focus(), mousepos_tile.to_phys2().to_phys3());
-		}
-	});
-	this->keybind_context.bind(keybinds::action_t::KILL_UNIT, [this]() {
-		selection.kill_unit();
-	});
 
-	// Villager build commands
-	// TODO place this into separate building menus instead of global hotkeys
-	auto bind_building_key = [this](keybinds::action_t action, int building, int military_building) {
-		this->keybind_context.bind(action, [this, building, military_building]() {
-			if (this->selection.contains_builders()) {
-				this->building_placement = true;
-				if (this->engine->get_keybind_manager().is_keymod_down(KMOD_LCTRL)) {
-					this->editor_current_building = military_building;
-				} else {
-					this->editor_current_building = building;
-				}
-			}
-		});
-	};
-	bind_building_key(keybinds::action_t::BUILDING_1, 598, 609); // House, barracks
-	bind_building_key(keybinds::action_t::BUILDING_2, 574, 558); // Mill, archery range
-	bind_building_key(keybinds::action_t::BUILDING_3, 616, 581); // Mining camp, stable
-	bind_building_key(keybinds::action_t::BUILDING_4, 611, 580); // Lumber camp, siege workshop
-	bind_building_key(keybinds::action_t::BUILDING_TOWN_CENTER, 568, 568); // Town center
-
-	// Switching between players with the 1-8 keys
-	auto bind_player_switch = [this](keybinds::action_t action, int player) {
-		this->keybind_context.bind(action, [this, player]() {
-			this->engine->current_player = player;
-			this->selection.clear();
-		});
-	};
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_1, 1);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_2, 2);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_3, 3);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_4, 4);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_5, 5);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_6, 6);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_7, 7);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_8, 8);
-
-	engine->get_keybind_manager().register_context(&this->keybind_context);
-
+	log::log(MSG(dbg) << "Loaded Renderer");
 }
 
 GameRenderer::~GameRenderer() {
@@ -273,289 +158,23 @@ GameRenderer::~GameRenderer() {
 	delete alphamask_shader::program;
 }
 
-void GameRenderer::move_camera() {
-	Engine &engine = Engine::get();
-	// read camera movement input keys, and move camera
-	// accordingly.
-
-	// camera movement speed, in pixels per millisecond
-	// one pixel per millisecond equals 14.3 tiles/second
-	float mov_x = 0.0, mov_y = 0.0, cam_movement_speed_keyboard = 0.5;
-
-	keybinds::KeybindManager &keybinds = engine.get_keybind_manager();
-
-	if (keybinds.is_key_down(SDLK_LEFT)) {
-		mov_x = -cam_movement_speed_keyboard;
-	}
-	if (keybinds.is_key_down(SDLK_RIGHT)) {
-		mov_x = cam_movement_speed_keyboard;
-	}
-	if (keybinds.is_key_down(SDLK_DOWN)) {
-		mov_y = cam_movement_speed_keyboard;
-	}
-	if (keybinds.is_key_down(SDLK_UP)) {
-		mov_y = -cam_movement_speed_keyboard;
-	}
-
-	engine.move_phys_camera(mov_x, mov_y, (float) engine.lastframe_duration_nsec() / 1e6);
-}
-
-bool GameRenderer::on_input(SDL_Event *e) {
-	Engine &engine = Engine::get();
-
-	switch (e->type) {
-
-	case SDL_QUIT:
-		engine.stop();
-		break;
-
-	case SDL_MOUSEBUTTONDOWN: {
-		switch (e->button.button) {
-		case SDL_BUTTON_LEFT:
-			if (this->clicking_active && !construct_mode && !this->building_placement) {
-				// begin a boxed selection
-				selection.drag_begin(mousepos_camgame);
-				dragging_active = true;
-			}
-			break;
-		case SDL_BUTTON_MIDDLE:
-			// activate scrolling
-			SDL_SetRelativeMouseMode(SDL_TRUE);
-			scrolling_active = true;
-
-			// deactivate clicking as long as mousescrolling is active
-			clicking_active = false;
-			break;
-		}
-		break;
-
-	}
-
-	case SDL_MOUSEBUTTONUP: {
-		// subtract value from window height to get position relative to lower right (0,0).
-		coord::window mousepos_window {(coord::pixel_t) e->button.x, (coord::pixel_t) e->button.y};
-		this->mousepos_camgame = mousepos_window.to_camgame();
-		// TODO once the terrain elevation milestone is implemented, use a method
-		// more suitable for converting camgame to phys3
-		this->mousepos_phys3 = mousepos_camgame.to_phys3();
-		this->mousepos_tile = mousepos_phys3.to_tile3().to_tile();
-		Terrain *terrain = this->game()->terrain.get();
-
-		switch (e->button.button) {
-
-		case SDL_BUTTON_LEFT:
-			if (this->dragging_active) { // Stop dragging
-				selection.drag_release(terrain, this->engine->get_keybind_manager().is_keymod_down(KMOD_LCTRL));
-				dragging_active = false;
-			} else if (clicking_active) {
-				if (construct_mode) {
-					log::log(MSG(dbg) <<
-					    "LMB [window]:   "
-					    " x " << std::setw(9) << mousepos_window.x <<
-					    " y " << std::setw(9) << mousepos_window.y);
-
-					constexpr auto phys_per_tile = openage::coord::settings::phys_per_tile;
-
-					log::log(MSG(dbg) <<
-					    "LMB [phys3]:    "
-					    " NE " << util::FixedPoint<phys_per_tile, 3, 8>{mousepos_phys3.ne} <<
-					    " SE " << util::FixedPoint<phys_per_tile, 3, 8>{mousepos_phys3.se} <<
-					    " UP " << util::FixedPoint<phys_per_tile, 3, 8>{mousepos_phys3.up});
-
-					log::log(MSG(dbg) <<
-					    "LMB [tile]:     "
-					    " NE " << std::setw(8) << mousepos_tile.ne <<
-					    " SE " << std::setw(8) << mousepos_tile.se);
-
-					TerrainChunk *chunk = terrain->get_create_chunk(mousepos_tile);
-					chunk->get_data(mousepos_tile)->terrain_id = editor_current_terrain;
-				} else if (this->building_placement) {
-					// confirm building placement with left click
-					// first create foundation using the producer
-					UnitContainer *container = &this->engine->get_game()->placed_units;
-					UnitType *building_type = this->game_spec()->get_type_index(this->editor_current_building);
-					UnitReference new_building = container->new_unit(*building_type, *this->player_focus(), mousepos_phys3);
-
-					// task all selected villagers to build
-					if (new_building.is_valid()) {
-						Command cmd(*this->player_focus(), new_building.get());
-						cmd.set_ability(ability_type::build);
-						this->selection.all_invoke(cmd);
-					}
-					this->building_placement = false;
-				}
-			}
-			break;
-
-		case SDL_BUTTON_MIDDLE:
-			if (scrolling_active) { // Stop scrolling
-				SDL_SetRelativeMouseMode(SDL_FALSE);
-				scrolling_active = false;
-
-				// reactivate mouse clicks as scrolling is over
-				clicking_active = true;
-			}
-			break;
-
-		case SDL_BUTTON_RIGHT:
-			if (clicking_active) {
-				if (construct_mode) {
-					// get chunk clicked on, don't create it if it's not there already
-					// -> placing buildings in void is forbidden that way
-					TerrainChunk *chunk = terrain->get_chunk(mousepos_tile);
-					if (chunk == nullptr) {
-						break;
-					}
-
-					// delete any unit on the tile
-					if (!chunk->get_data(mousepos_tile)->obj.empty()) {
-						// get first object currently standing at the clicked position
-						TerrainObject *obj = chunk->get_data(mousepos_tile)->obj[0];
-						log::log(MSG(dbg) << "delete unit with unit id " << obj->unit.id);
-						obj->unit.delete_unit();
-					} else if (this->game_spec()->producer_count() > 0) {
-						// try creating a unit
-						log::log(MSG(dbg) << "create unit with producer id " << this->editor_current_building);
-						UnitContainer *container = &this->engine->get_game()->placed_units;
-						UnitType &type = *this->game_spec()->get_type_index(this->editor_current_building);
-						container->new_unit(type, *this->player_focus(), mousepos_tile.to_phys2().to_phys3());
-					}
-				} else {
-					// right click can cancel building placement
-					if (this->building_placement) {
-						this->building_placement = false;
-					} else {
-						auto cmd = this->get_action(mousepos_phys3);
-						selection.all_invoke(cmd);
-					}
-				}
-			}
-			break;
-
-		} // switch (e->button.button)
-		break;
-
-	} // case SDL_MOUSEBUTTONUP:
-
-	case SDL_MOUSEMOTION: {
-
-		// update mouse position values
-		coord::window mousepos_window {(coord::pixel_t) e->button.x, (coord::pixel_t) e->button.y};
-		this->mousepos_camgame = mousepos_window.to_camgame();
-		this->mousepos_phys3 = mousepos_camgame.to_phys3();
-		this->mousepos_tile = mousepos_phys3.to_tile3().to_tile();
-
-		if (dragging_active) {
-			selection.drag_update(mousepos_camgame);
-		}
-
-		// scroll, if middle mouse is being pressed
-		//  SDL_GetRelativeMouseMode() queries sdl for that.
-		else if (scrolling_active) {
-			engine.move_phys_camera(e->motion.xrel, e->motion.yrel);
-		}
-		break;
-	}
-
-	case SDL_MOUSEWHEEL:
-		if (this->construct_mode) {
-			if (engine.get_keybind_manager().is_keymod_down(KMOD_LCTRL) && this->game_spec()->producer_count() > 0) {
-				editor_current_building = util::mod<ssize_t>(editor_current_building + e->wheel.y, this->game_spec()->producer_count());
-			} else {
-				editor_current_terrain = util::mod<ssize_t>(editor_current_terrain + e->wheel.y, this->game_spec()->get_terrain_meta()->terrain_id_count);
-			}
-		}
-		break;
-
-	case SDL_KEYUP: {
-		SDL_Keymod keymod = SDL_GetModState();
-
-		SDL_Keycode sym = reinterpret_cast<SDL_KeyboardEvent *>(e)->keysym.sym;
-		keybinds::KeybindManager &keybinds = engine.get_keybind_manager();
-		keybinds.set_key_state(sym, keymod, false);
-		keybinds.press(keybinds::key_t(sym, keymod));
-		break;
-	}
-
-	case SDL_KEYDOWN: {
-		SDL_Keycode sym = reinterpret_cast<SDL_KeyboardEvent *>(e)->keysym.sym;
-		engine.get_keybind_manager().set_key_state(sym, SDL_GetModState(), true);
-		break;
-	}
-
-
-	} // switch (e->type)
-
-	return true;
-}
-
 bool GameRenderer::on_draw() {
 	Engine &engine = Engine::get();
 
 	// draw terrain
 	GameMain *game = engine.get_game();
 	if (game) {
-		this->move_camera();
 
 		// draw gaben, our great and holy protector, bringer of the half-life 3.
 		gaben->draw(coord::camgame{0, 0});
 
-		game->terrain->draw(&engine);
+		// TODO move render code out of terrain
+		if (game->terrain) {
+			game->terrain->draw(&engine);
+		}
 
 		if (this->debug_grid_active) {
 			this->draw_debug_grid();
-		}
-
-		if (not this->game_spec()->load_complete()) {
-			// Show that gamedata is still loading
-			engine.render_text({0, 0}, 20, "Loading gamedata...");
-		}
-	}
-
-	// draw construction or actions mode indicator
-	int x = 400 - (engine.engine_coord_data->window_size.x / 2);
-	int y = 35 - (engine.engine_coord_data->window_size.y / 2);
-
-	std::string mode_str;
-	if (this->construct_mode) {
-		mode_str += "Construct mode";
-	} else {
-		mode_str += "Actions mode";
-		if (this->use_set_ability) {
-			mode_str += " (" + std::to_string(this->ability) + ")";
-		}
-	}
-	mode_str += " (player " + std::to_string(engine.current_player) + ")";
-	engine.render_text({x, y}, 20, mode_str.c_str());
-
-	if (this->building_placement) {
-		auto building_type = this->game_spec()->get_type_index(this->editor_current_building);
-		auto txt = building_type->default_texture();
-		auto size = building_type->foundation_size;
-		tile_range center = building_center(mousepos_tile.to_phys2().to_phys3(), size);
-		txt->draw(center.draw.to_camgame(), 0, engine.current_player);
-	}
-
-	return true;
-}
-
-bool GameRenderer::on_drawhud() {
-	Engine &e = Engine::get();
-	GameMain *game = this->game();
-
-	if (this->construct_mode && game) {
-
-		// draw the currently selected editor texture tile
-		game->terrain->texture(this->editor_current_terrain)->draw(coord::window{63, 84}.to_camhud(), ALPHAMASKED);
-
-		if (this->game_spec()->producer_count() > 0) {
-			// and the current active building
-			coord::window bpreview_pos;
-			bpreview_pos.x = e.engine_coord_data->window_size.x - 200;
-			bpreview_pos.y = 200;
-
-			auto txt = this->game_spec()->get_type_index(this->editor_current_building)->default_texture();
-			txt->sample(bpreview_pos.to_camhud(), engine->current_player);
 		}
 	}
 	return true;
@@ -617,30 +236,7 @@ GameMain *GameRenderer::game() const {
 }
 
 GameSpec *GameRenderer::game_spec() const {
-	return this->game()->get_settings()->spec.get();
-}
-
-Player *GameRenderer::player_focus() const {
-	return &this->game()->players[this->engine->current_player - 1];
-}
-
-Command GameRenderer::get_action(const coord::phys3 &pos) const {
-	GameMain *game = this->engine->get_game();
-	auto obj = game->terrain->obj_at_point(pos);
-	if (obj) {
-		Command c(*this->player_focus(), &obj->unit, pos);
-		if (this->use_set_ability) {
-			c.set_ability(ability);
-		}
-		return c;
-	}
-	else {
-		Command c(*this->player_focus(), pos);
-		if (this->use_set_ability) {
-			c.set_ability(ability);
-		}
-		return c;
-	}
+	return this->game()->get_spec();
 }
 
 } //namespace openage

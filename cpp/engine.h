@@ -32,6 +32,7 @@ class ResizeHandler;
 
 class GameSpec;
 class GameMain;
+class Player;
 
 struct coord_data {
 	coord::window window_size{800, 600};
@@ -198,6 +199,11 @@ public:
 	 * currently running
 	 */
 	GameMain *get_game();
+
+	/**
+	 * return the current player or null if no active game
+	 */
+	Player *player_focus() const;
 
 	/**
 	 * return this engine's job manager.

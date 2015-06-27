@@ -14,6 +14,7 @@ namespace openage {
 class Command;
 class Player;
 class Terrain;
+class TerrainObject;
 class Unit;
 class UnitContainer;
 class UnitType;
