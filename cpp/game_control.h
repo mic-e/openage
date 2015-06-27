@@ -1,7 +1,7 @@
 // Copyright 2015-2015 the openage authors. See copying.md for legal info.
 
-#ifndef OPENAGE_UI_MENU_H_
-#define OPENAGE_UI_MENU_H_
+#ifndef OPENAGE_GAME_CONTROL_H_
+#define OPENAGE_GAME_CONTROL_H_
 
 #include "coord/camgame.h"
 #include "keybinds/keybind_context.h"

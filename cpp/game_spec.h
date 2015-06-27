@@ -1,7 +1,7 @@
 // Copyright 2015-2015 the openage authors. See copying.md for legal info.
 
-#ifndef OPENAGE_DATAMANAGER_H_
-#define OPENAGE_DATAMANAGER_H_
+#ifndef OPENAGE_GAME_SPEC_H_
+#define OPENAGE_GAME_SPEC_H_
 
 #include <unordered_map>
 

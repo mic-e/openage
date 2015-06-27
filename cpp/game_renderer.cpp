@@ -1,4 +1,4 @@
-// Copyright 2015-2015 the openage authors. See copying.md for legal info.
+// Copyright 2014-2015 the openage authors. See copying.md for legal info.
 
 #include <epoxy/gl.h>
 #include <SDL2/SDL.h>
