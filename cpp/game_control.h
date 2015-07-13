@@ -4,7 +4,7 @@
 #define OPENAGE_GAME_CONTROL_H_
 
 #include "coord/camgame.h"
-#include "keybinds/keybind_context.h"
+#include "input/input_context.h"
 #include "unit/command.h"
 #include "unit/selection.h"
 #include "unit/unit_type.h"
@@ -18,7 +18,7 @@ namespace openage {
 /**
  * a target for input handling and gui rendering
  */
-class OutputMode : public keybinds::KeybindContext {
+class OutputMode : public input::InputContext {
 public:
 	virtual void render() = 0;
 
@@ -129,11 +129,6 @@ class GameControl :
 public:
 	GameControl(openage::Engine *engine);
 
-	/**
-	 * update camera position
-	 */
-	void move_camera();
-
 	void toggle_mode();
 
 	bool on_drawhud() override;
@@ -162,6 +157,7 @@ private:
 	coord::phys3 mousepos_phys3;
 	coord::tile mousepos_tile;
 
+	// TODO move to engine
 	util::ExternalProfiler external_profiler;
 };
 

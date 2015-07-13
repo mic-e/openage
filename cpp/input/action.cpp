@@ -5,11 +5,22 @@
 #include "action.h"
 
 namespace openage {
-namespace keybinds {
+namespace input {
+
+Action::Action(const action_id_t &type, const action_func_t f)
+	:
+	type(type),
+	on_action(f) {
+}
+
+bool Action::do_action(const action_arg_t &arg) {
+	this->on_action(arg);
+	return true;
+}
 
 int action_hash::operator()(const action_t& a) const {
 	return std::hash<int>()(static_cast<int>(a));
 }
 
-} //namespace keybinds
+} //namespace input
 } //namespace openage

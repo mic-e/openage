@@ -8,33 +8,34 @@
 #include <unordered_map>
 #include <SDL2/SDL.h>
 
+#include "../handlers.h"
 #include "action.h"
-#include "keybind_context.h"
-#include "key.h"
+#include "event.h"
+#include "input_context.h"
 
 namespace openage {
-namespace keybinds {
+namespace input {
 
-class KeybindManager {
+class InputManager : public openage::InputHandler {
 
 public:
-	KeybindManager();
+	InputManager();
 
 	/**
 	 * returns the global keybind context.
 	 * actions bound here will be retained even when override_context is called.
 	 */
-	KeybindContext &get_global_keybind_context();
+	InputContext &get_global_keybind_context();
 
 	/**
 	 * register a hotkey context, and override old keybinds.
 	 */
-	void override_context(KeybindContext *context);
+	void override_context(InputContext *context);
 
 	/**
 	 * register a hotkey context.
 	 */
-	void register_context(KeybindContext *context);
+	void register_context(InputContext *context);
 
 	/**
 	 * removes the most recently registered context.
@@ -46,7 +47,7 @@ public:
 	 * first checks whether an action is bound to it.
 	 * if it is, look for an handler to execute that handler.
 	 */
-	void press(key_t k);
+	void press(event_t k);
 
 	/**
 	 * sets the state of a specific key
@@ -64,10 +65,12 @@ public:
 	 */
 	bool is_keymod_down(SDL_Keymod mod) const;
 
+	bool on_input(SDL_Event *e) override;
+
 private:
-	KeybindContext global_hotkeys;
-	std::unordered_map<key_t, action_t, key_hash> keys;
-	std::stack<std::vector<KeybindContext *>> contexts;
+	InputContext global_hotkeys;
+	std::unordered_map<event_t, action_t, event_hash> keys;
+	std::stack<std::vector<InputContext *>> contexts;
 
 	/**
 	 * key to is_down map.
@@ -76,6 +79,11 @@ private:
 	 * false indicates the key is untouched.
 	 */
 	std::unordered_map<SDL_Keycode, bool> key_states;
+
+	/**
+	 * current mouse position
+	 */
+	coord::window mouse_position;
 
 	/*
 	 * Current key modifiers.
@@ -91,7 +99,7 @@ private:
 	static constexpr SDL_Keymod used_keymods = static_cast<SDL_Keymod>(KMOD_CTRL | KMOD_SHIFT | KMOD_ALT | KMOD_GUI);
 };
 
-} //namespace keybinds
+} //namespace input
 } //namespace openage
 
 #endif

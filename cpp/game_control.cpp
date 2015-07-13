@@ -14,6 +14,19 @@ CreateMode::CreateMode(Engine &engine)
 	// some default settings
 	this->settings.number_of_players = 8;
 	this->settings.spec = std::make_shared<GameSpec>(&this->assetmanager);
+
+
+	input::Action start(input::action_t::START_GAME, [this](const input::action_arg_t &arg) {
+		log::log(MSG(dbg) << "start game");
+		Engine &engine = Engine::get();
+		engine.start_game(this->settings);
+	});
+	this->bind(start);
+
+	// multiple events
+	this->set_event(input::event_t(SDLK_a), input::action_t::START_GAME);
+	this->set_event(input::event_t(SDLK_d), input::action_t::START_GAME);
+	this->set_event(input::event_t(input::event_source_t::MOUSE, 0), input::action_t::START_GAME);
 }
 
 void CreateMode::render() {
@@ -27,6 +40,8 @@ void CreateMode::render() {
 		// Show that gamedata is still loading
 		engine.render_text({0, 100}, 20, "Loading gamedata...");
 	}
+
+	engine.render_text({0, 140}, 20, "Click to create new game");
 }
 
 bool CreateMode::on_mouse_wheel(int direction, coord::window point) {
@@ -34,8 +49,6 @@ bool CreateMode::on_mouse_wheel(int direction, coord::window point) {
 }
 
 bool CreateMode::on_single_click(int button, coord::window point) {
-	Engine &engine = Engine::get();
-	engine.start_game(this->settings);
 	return true;
 }
 
@@ -54,7 +67,7 @@ ActionMode::ActionMode()
 
 	// this->engine->register_drawhud_action(&this->selection);
 
-	this->bind(keybinds::action_t::TRAIN_OBJECT, [this]() {
+	this->bind(input::action_t::TRAIN_OBJECT, [this]() {
 		// attempt to train editor selected object
 		if (this->type_focus) {
 			Engine &engine = Engine::get();
@@ -63,21 +76,21 @@ ActionMode::ActionMode()
 			this->selection.all_invoke(cmd);
 		}
 	});
-	this->bind(keybinds::action_t::ENABLE_BUILDING_PLACEMENT, [this]() {
+	this->bind(input::action_t::ENABLE_BUILDING_PLACEMENT, [this]() {
 		// this->building_placement = true;
 	});
-	this->bind(keybinds::action_t::DISABLE_SET_ABILITY, [this]() {
+	this->bind(input::action_t::DISABLE_SET_ABILITY, [this]() {
 		this->use_set_ability = false;
 	});
-	this->bind(keybinds::action_t::SET_ABILITY_MOVE, [this]() {
+	this->bind(input::action_t::SET_ABILITY_MOVE, [this]() {
 		this->use_set_ability = true;
 		this->ability = ability_type::move;
 	});
-	this->bind(keybinds::action_t::SET_ABILITY_GATHER, [this]() {
+	this->bind(input::action_t::SET_ABILITY_GATHER, [this]() {
 		this->use_set_ability = true;
 		this->ability = ability_type::gather;
 	});
-	this->bind(keybinds::action_t::SPAWN_VILLAGER, [this]() {
+	this->bind(input::action_t::SPAWN_VILLAGER, [this]() {
 		Engine &engine = Engine::get();
 		GameSpec *spec = engine.get_game()->get_spec();
 		if (spec->producer_count() > 0) {
@@ -87,18 +100,18 @@ ActionMode::ActionMode()
 			//engine.get_game()->placed_units.new_unit(type, *engine.player_focus(), mousepos_tile.to_phys2().to_phys3());
 		}
 	});
-	this->bind(keybinds::action_t::KILL_UNIT, [this]() {
+	this->bind(input::action_t::KILL_UNIT, [this]() {
 		selection.kill_unit();
 	});
 
 	// Villager build commands
 	// TODO place this into separate building menus instead of global hotkeys
-	auto bind_building_key = [this](keybinds::action_t action, int building, int military_building) {
+	auto bind_building_key = [this](input::action_t action, int building, int military_building) {
 		this->bind(action, [this, building, military_building]() {
 			if (this->selection.contains_builders()) {
 				//this->building_placement = true;
 				Engine &engine = Engine::get();
-				if (engine.get_keybind_manager().is_keymod_down(KMOD_LCTRL)) {
+				if (engine.get_input_manager().is_keymod_down(KMOD_LCTRL)) {
 					//this->type_focus = military_building;
 				} else {
 					//this->type_focus = building;
@@ -106,31 +119,29 @@ ActionMode::ActionMode()
 			}
 		});
 	};
-	bind_building_key(keybinds::action_t::BUILDING_1, 598, 609); // House, barracks
-	bind_building_key(keybinds::action_t::BUILDING_2, 574, 558); // Mill, archery range
-	bind_building_key(keybinds::action_t::BUILDING_3, 616, 581); // Mining camp, stable
-	bind_building_key(keybinds::action_t::BUILDING_4, 611, 580); // Lumber camp, siege workshop
-	bind_building_key(keybinds::action_t::BUILDING_TOWN_CENTER, 568, 568); // Town center
+	bind_building_key(input::action_t::BUILDING_1, 598, 609); // House, barracks
+	bind_building_key(input::action_t::BUILDING_2, 574, 558); // Mill, archery range
+	bind_building_key(input::action_t::BUILDING_3, 616, 581); // Mining camp, stable
+	bind_building_key(input::action_t::BUILDING_4, 611, 580); // Lumber camp, siege workshop
+	bind_building_key(input::action_t::BUILDING_TOWN_CENTER, 568, 568); // Town center
 
 	// Switching between players with the 1-8 keys
-	auto bind_player_switch = [this](keybinds::action_t action, int player) {
+	auto bind_player_switch = [this](input::action_t action, int player) {
 		this->bind(action, [this, player]() {
 			Engine &engine = Engine::get();
 			engine.current_player = player;
 			this->selection.clear();
 		});
 	};
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_1, 1);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_2, 2);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_3, 3);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_4, 4);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_5, 5);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_6, 6);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_7, 7);
-	bind_player_switch(keybinds::action_t::SWITCH_TO_PLAYER_8, 8);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_1, 1);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_2, 2);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_3, 3);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_4, 4);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_5, 5);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_6, 6);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_7, 7);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_8, 8);
 
-
-	// engine->get_keybind_manager().register_context(&this->keybind_context);
 }
 
 Command ActionMode::get_action(const coord::phys3 &pos) const {
@@ -235,6 +246,27 @@ EditorMode::EditorMode()
 	editor_current_building{0},
 	paint_terrain{true},
 	building_placement{false} {
+
+
+	input::Action toggle(input::action_t::TOGGLE_MENU, [this](const input::action_arg_t &arg) {
+		log::log(MSG(dbg) << "toggle");
+		this->paint_terrain = !this->paint_terrain;
+	});
+	this->bind(toggle);
+	this->set_event(input::event_t(SDLK_q), input::action_t::TOGGLE_MENU);
+
+	this->bind(input::action_t::ENABLE_BUILDING_PLACEMENT, [this]() {
+		log::log(MSG(dbg) << "toggle");
+		this->paint_terrain = !this->paint_terrain;
+	});
+
+
+	input::Action start(input::action_t::START_GAME, [this](const input::action_arg_t &arg) {
+		log::log(MSG(dbg) << "click");
+		this->on_single_click(0, arg.mouse);
+	});
+	this->bind(start);
+	this->set_event(input::event_t(input::event_source_t::MOUSE, 0), input::action_t::START_GAME);
 }
 
 void EditorMode::render() {
@@ -266,7 +298,7 @@ bool EditorMode::on_mouse_wheel(int direction, coord::window point) {
 	GameSpec *spec = engine.get_game()->get_spec();
 
 	// modify selected item
-	if (engine.get_keybind_manager().is_keymod_down(KMOD_LCTRL) && spec->producer_count() > 0) {
+	if (engine.get_input_manager().is_keymod_down(KMOD_LCTRL) && spec->producer_count() > 0) {
 		editor_current_building = util::mod<ssize_t>(editor_current_building + direction, spec->producer_count());
 	} else {
 		editor_current_terrain = util::mod<ssize_t>(editor_current_terrain + direction, spec->get_terrain_meta()->terrain_id_count);
@@ -345,37 +377,40 @@ GameControl::GameControl(openage::Engine *engine)
 
 	// add handlers
 	engine->register_drawhud_action(this);
-	engine->register_input_action(this);
+	//engine->register_input_action(this);
 
 	// modes list
 	this->modes.push_back(std::make_unique<CreateMode>(*engine));
 	this->modes.push_back(std::make_unique<EditorMode>());
+
+	// initial active mode
 	this->active_mode = modes.front().get();
+	engine->get_input_manager().register_context(this->active_mode);
 
 	// initialize global keybinds
-	auto &global_keybind_context = engine->get_keybind_manager().get_global_keybind_context();
-	global_keybind_context.bind(keybinds::action_t::STOP_GAME, [this]() {
+	auto &global_input_context = engine->get_input_manager().get_global_keybind_context();
+	global_input_context.bind(input::action_t::STOP_GAME, [this]() {
 		this->engine->stop();
 	});
-	global_keybind_context.bind(keybinds::action_t::TOGGLE_HUD, [this]() {
+	global_input_context.bind(input::action_t::TOGGLE_HUD, [this]() {
 		this->engine->drawing_huds = !this->engine->drawing_huds;
 	});
-	global_keybind_context.bind(keybinds::action_t::SCREENSHOT, [this]() {
+	global_input_context.bind(input::action_t::SCREENSHOT, [this]() {
 		this->engine->get_screenshot_manager().save_screenshot();
 	});
-	global_keybind_context.bind(keybinds::action_t::TOGGLE_DEBUG_OVERLAY, [this]() {
+	global_input_context.bind(input::action_t::TOGGLE_DEBUG_OVERLAY, [this]() {
 		this->engine->drawing_debug_overlay = !this->engine->drawing_debug_overlay;
 	});
-	global_keybind_context.bind(keybinds::action_t::TOGGLE_CONSTRUCT_MODE, [this]() {
+	global_input_context.bind(input::action_t::TOGGLE_CONSTRUCT_MODE, [this]() {
 		this->toggle_mode();
 	});
-	global_keybind_context.bind(keybinds::action_t::QUICK_SAVE, [this]() {
+	global_input_context.bind(input::action_t::QUICK_SAVE, [this]() {
 		gameio::save(this->engine->get_game(), "default_save.txt");
 	});
-	global_keybind_context.bind(keybinds::action_t::QUICK_LOAD, [this]() {
+	global_input_context.bind(input::action_t::QUICK_LOAD, [this]() {
 		gameio::load(this->engine->get_game(), "default_save.txt");
 	});
-	global_keybind_context.bind(keybinds::action_t::TOGGLE_PROFILER, [this]() {
+	global_input_context.bind(input::action_t::TOGGLE_PROFILER, [this]() {
 		if (this->external_profiler.currently_profiling) {
 			this->external_profiler.stop();
 			this->external_profiler.show_results();
@@ -385,46 +420,20 @@ GameControl::GameControl(openage::Engine *engine)
 	});
 }
 
-void GameControl::move_camera() {
-	Engine &engine = Engine::get();
-	// read camera movement input keys, and move camera
-	// accordingly.
-
-	// camera movement speed, in pixels per millisecond
-	// one pixel per millisecond equals 14.3 tiles/second
-	float mov_x = 0.0, mov_y = 0.0, cam_movement_speed_keyboard = 0.5;
-
-	keybinds::KeybindManager &keybinds = engine.get_keybind_manager();
-
-	if (keybinds.is_key_down(SDLK_LEFT)) {
-		mov_x = -cam_movement_speed_keyboard;
-	}
-	if (keybinds.is_key_down(SDLK_RIGHT)) {
-		mov_x = cam_movement_speed_keyboard;
-	}
-	if (keybinds.is_key_down(SDLK_DOWN)) {
-		mov_y = cam_movement_speed_keyboard;
-	}
-	if (keybinds.is_key_down(SDLK_UP)) {
-		mov_y = -cam_movement_speed_keyboard;
-	}
-
-	engine.move_phys_camera(mov_x, mov_y, (float) engine.lastframe_duration_nsec() / 1e6);
-}
-
 void GameControl::toggle_mode() {
 	this->active_mode_index = (this->active_mode_index + 1) % this->modes.size();
 	this->active_mode = this->modes[this->active_mode_index].get();
+
+	// update the context
+	engine->get_input_manager().remove_context();
+	engine->get_input_manager().register_context(this->active_mode);
 }
 
 bool GameControl::on_input(SDL_Event *e) {
 	Engine &engine = Engine::get();
 
+	// top level input handler
 	switch (e->type) {
-
-	case SDL_QUIT:
-		engine.stop();
-		break;
 
 	case SDL_MOUSEBUTTONDOWN: {
 		switch (e->button.button) {
@@ -467,7 +476,6 @@ bool GameControl::on_input(SDL_Event *e) {
 
 		} // switch (e->button.button)
 		break;
-
 	} // case SDL_MOUSEBUTTONUP:
 
 	case SDL_MOUSEMOTION: {
@@ -492,31 +500,12 @@ bool GameControl::on_input(SDL_Event *e) {
 		break;
 	}
 
-	case SDL_KEYUP: {
-		SDL_Keymod keymod = SDL_GetModState();
-
-		SDL_Keycode sym = reinterpret_cast<SDL_KeyboardEvent *>(e)->keysym.sym;
-		keybinds::KeybindManager &keybinds = engine.get_keybind_manager();
-		keybinds.set_key_state(sym, keymod, false);
-		keybinds.press(keybinds::key_t(sym, keymod));
-		break;
-	}
-
-	case SDL_KEYDOWN: {
-		SDL_Keycode sym = reinterpret_cast<SDL_KeyboardEvent *>(e)->keysym.sym;
-		engine.get_keybind_manager().set_key_state(sym, SDL_GetModState(), true);
-		break;
-	}
-
 	} // switch (e->type)
 
 	return true;
 }
 
 bool GameControl::on_drawhud() {
-
-	// move this somewhere else
-	this->move_camera();
 
 	// render the active mode
 	this->active_mode->render();
