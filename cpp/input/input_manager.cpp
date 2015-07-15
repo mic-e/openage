@@ -173,7 +173,7 @@ bool InputManager::is_down(SDL_Keycode k) const {
 
 
 bool InputManager::is_mod_down(SDL_Keymod mod) const {
-	return this->keymod == sdl_mod(mod);
+	return false; //this->keymod == sdl_mod(mod);
 }
 
 

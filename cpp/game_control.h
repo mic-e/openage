@@ -19,6 +19,11 @@ namespace openage {
  */
 class OutputMode : public input::InputContext {
 public:
+
+	/**
+	 * used when switching modes
+	 */
+	virtual void on_enter() = 0;
 	virtual void render() = 0;
 
 };
@@ -30,6 +35,7 @@ class CreateMode : public OutputMode {
 public:
 	CreateMode(Engine &engine);
 
+	void on_enter() override;
 	void render() override;
 
 private:
@@ -47,12 +53,11 @@ class ActionMode : public OutputMode {
 public:
 	ActionMode();
 
+	void on_enter() override;
 	void render() override;
 
 	bool on_mouse_wheel(int direction, coord::window point);
 	bool on_single_click(int button, coord::window point);
-	bool on_drag_start(int button, coord::window point);
-	bool on_drag_end(int button, coord::window point);
 
 private:
 
@@ -84,6 +89,7 @@ class EditorMode : public OutputMode {
 public:
 	EditorMode();
 
+	void on_enter() override;
 	void render() override;
 
 	bool on_mouse_wheel(int direction, coord::window point);
@@ -128,20 +134,6 @@ private:
 
 	OutputMode *active_mode;
 	int active_mode_index;
-
-
-	// TODO move these
-	bool clicking_active;
-	bool scrolling_active;
-	bool dragging_active;
-
-	// remove this
-	bool construct_mode;
-
-	// mouse position
-	coord::camgame mousepos_camgame;
-	coord::phys3 mousepos_phys3;
-	coord::tile mousepos_tile;
 
 };
 

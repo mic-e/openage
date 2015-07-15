@@ -21,6 +21,8 @@ CreateMode::CreateMode(Engine &engine)
 	});
 }
 
+void CreateMode::on_enter() {}
+
 void CreateMode::render() {
 
 	// TODO: move these somewhere else
@@ -102,24 +104,32 @@ ActionMode::ActionMode()
 	bind_building_key(input::action_t::BUILDING_4, 611, 580); // Lumber camp, siege workshop
 	bind_building_key(input::action_t::BUILDING_TOWN_CENTER, 568, 568); // Town center
 
-	// Switching between players with the 1-8 keys
-	auto bind_player_switch = [this](input::action_t action, int player) {
-		this->bind(action, [this, player](const input::action_arg_t &) {
-			Engine &engine = Engine::get();
-			engine.current_player = player;
-			this->selection.clear();
-		});
-	};
-	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_1, 1);
-	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_2, 2);
-	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_3, 3);
-	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_4, 4);
-	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_5, 5);
-	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_6, 6);
-	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_7, 7);
-	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_8, 8);
+
+	this->bind(input::event_class::MOUSE, [this](const input::action_arg_t &arg) {
+		Engine &engine = Engine::get();
+		if (arg.e.cc == input::class_code_t(input::event_class::MOUSE_MOTION, 0) &&
+			engine.get_input_manager().is_down(input::event_class::MOUSE_BUTTON, 1)) {
+			coord::camgame mousepos_camgame = arg.mouse.to_camgame();
+			this->selection.drag_update(mousepos_camgame);
+			return true;
+		}
+		else if (arg.e.cc == input::class_code_t(input::event_class::MOUSE_BUTTON, 1)) {
+			coord::camgame mousepos_camgame = arg.mouse.to_camgame();
+			log::log(MSG(dbg) << "select");
+			Terrain *terrain = engine.get_game()->terrain.get();
+			this->selection.drag_update(mousepos_camgame);
+			this->selection.drag_release(terrain, engine.get_input_manager().is_mod_down(KMOD_LCTRL));
+			return true;
+		}
+		else if (arg.e.cc == input::class_code_t(input::event_class::MOUSE_BUTTON, 3)) {
+			this->on_single_click(0, arg.mouse);
+		}
+		return false;
+	});
 
 }
+
+void ActionMode::on_enter() {}
 
 Command ActionMode::get_action(const coord::phys3 &pos) const {
 	Engine &engine = Engine::get();
@@ -145,8 +155,8 @@ void ActionMode::render() {
 	Engine &engine = Engine::get();
 
 	// draw construction or actions mode indicator
-	int x = 400 - (engine.engine_coord_data->window_size.x / 2);
-	int y = 35 - (engine.engine_coord_data->window_size.y / 2);
+	int x = 200; // - (engine.engine_coord_data->window_size.x / 2);
+	int y = 135; // - (engine.engine_coord_data->window_size.y / 2);
 
 	std::string mode_str;
 	mode_str += "Actions mode";
@@ -164,6 +174,8 @@ void ActionMode::render() {
 		tile_range center = building_center(mousepos_tile.to_phys2().to_phys3(), size);
 		txt->draw(center.draw.to_camgame(), 0, engine.current_player);
 	}
+
+	this->selection.on_drawhud();
 }
 
 bool ActionMode::on_mouse_wheel(int, coord::window) {
@@ -195,24 +207,7 @@ bool ActionMode::on_single_click(int, coord::window point) {
 	auto mousepos_phys3 = mousepos_camgame.to_phys3();
 
 	auto cmd = this->get_action(mousepos_phys3);
-	selection.all_invoke(cmd);
-
-	return false;
-}
-bool ActionMode::on_drag_start(int, coord::window) {
-
-	//selection.drag_begin(mousepos_camgame);
-	//dragging_active = true;
-
-	return false;
-}
-
-bool ActionMode::on_drag_end(int, coord::window) {
-
-	//selection.drag_update(mousepos_camgame);
-
-	//selection.drag_release(terrain, this->engine->get_keybind_manager().is_keymod_down(KMOD_LCTRL));
-	//dragging_active = false;
+	this->selection.all_invoke(cmd);
 
 	return false;
 }
@@ -261,6 +256,8 @@ EditorMode::EditorMode()
 		return false;
 	});
 }
+
+void EditorMode::on_enter() {}
 
 void EditorMode::render() {
 
@@ -372,18 +369,15 @@ bool EditorMode::on_drag_end(int, coord::window) {
 
 GameControl::GameControl(openage::Engine *engine)
 	:
-	engine{engine},
-	clicking_active{true},
-	scrolling_active{false},
-	dragging_active{false} {
+	engine{engine} {
 
 	// add handlers
 	engine->register_drawhud_action(this);
-	//engine->register_input_action(this);
 
 	// modes list
 	this->modes.push_back(std::make_unique<CreateMode>(*engine));
 	this->modes.push_back(std::make_unique<EditorMode>());
+	this->modes.push_back(std::make_unique<ActionMode>());
 
 	// initial active mode
 	this->active_mode = modes.front().get();
@@ -399,6 +393,7 @@ GameControl::GameControl(openage::Engine *engine)
 void GameControl::toggle_mode() {
 	this->active_mode_index = (this->active_mode_index + 1) % this->modes.size();
 	this->active_mode = this->modes[this->active_mode_index].get();
+	this->active_mode->on_enter();
 
 	// update the context
 	engine->get_input_manager().remove_context();

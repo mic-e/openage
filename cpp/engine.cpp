@@ -211,6 +211,21 @@ Engine::Engine(util::Dir *data_dir, const char *windowtitle)
 		}
 		return false;
 	});
+
+	// Switching between players with the 1-8 keys
+	auto bind_player_switch = [this, &global_input_context](input::action_t action, int player) {
+		global_input_context.bind(action, [this, player](const input::action_arg_t &) {
+			this->current_player = player;
+		});
+	};
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_1, 1);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_2, 2);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_3, 3);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_4, 4);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_5, 5);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_6, 6);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_7, 7);
+	bind_player_switch(input::action_t::SWITCH_TO_PLAYER_8, 8);
 }
 
 Engine::~Engine() {

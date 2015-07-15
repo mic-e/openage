@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "../log/log.h"
 #include "error.h"
 #include "dir.h"
 
@@ -81,6 +82,7 @@ std::vector<lineformat> recurse_data_files(Dir basedir, const std::string &fname
 	std::string merged_filename = basedir.join(fname);
 
 	if (0 < file_size(merged_filename)) {
+		log::log(MSG(dbg) << "read " << merged_filename);
 		result = read_csv_file<lineformat>(merged_filename);
 
 		//the new basedir is the old basedir
