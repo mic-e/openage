@@ -20,8 +20,10 @@
 #include "handlers.h"
 #include "job/job_manager.h"
 #include "input/input_manager.h"
+#include "util/externalprofiler.h"
 #include "util/dir.h"
 #include "util/fps.h"
+#include "game_save.h"
 #include "screenshot.h"
 
 namespace openage {
@@ -360,6 +362,11 @@ private:
 	 * but it would allow having multiple ones.
 	 */
 	SDL_GLContext glcontext;
+
+	/**
+	 * profiler used by the engine
+	 */
+	util::ExternalProfiler external_profiler;
 };
 
 } // namespace openage

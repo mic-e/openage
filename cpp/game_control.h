@@ -8,7 +8,6 @@
 #include "unit/command.h"
 #include "unit/selection.h"
 #include "unit/unit_type.h"
-#include "util/externalprofiler.h"
 #include "engine.h"
 #include "game_main.h"
 #include "handlers.h"
@@ -113,15 +112,13 @@ private:
  * hud rendering and input handling is redirected to the active mode
  */
 class GameControl :
-		public openage::HudHandler,
-		public openage::InputHandler {
+		public openage::HudHandler {
 public:
 	GameControl(openage::Engine *engine);
 
 	void toggle_mode();
 
 	bool on_drawhud() override;
-	bool on_input(SDL_Event *e) override;
 
 private:
 	Engine *engine;
@@ -146,8 +143,6 @@ private:
 	coord::phys3 mousepos_phys3;
 	coord::tile mousepos_tile;
 
-	// TODO move to engine
-	util::ExternalProfiler external_profiler;
 };
 
 } //namespace openage

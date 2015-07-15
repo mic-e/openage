@@ -2,7 +2,6 @@
 
 #include "util/strings.h"
 #include "game_control.h"
-#include "game_save.h"
 #include "game_spec.h"
 
 namespace openage {
@@ -31,10 +30,11 @@ void CreateMode::render() {
 	Engine &engine = Engine::get();
 	if (!this->settings.spec->load_complete()) {
 		// Show that gamedata is still loading
-		engine.render_text({0, 100}, 20, "Loading gamedata...");
+		engine.render_text({0, 100}, 12, "Loading gamedata...");
 	}
 
-	engine.render_text({0, 140}, 20, "Click to create new game");
+	engine.render_text({0, 160}, 12, "Return -> start a new game");
+	engine.render_text({0, 140}, 12, "M      -> toggle modes");
 }
 
 ActionMode::ActionMode()
@@ -225,36 +225,41 @@ EditorMode::EditorMode()
 	building_placement{false} {
 
 
-	input::Action toggle(input::action_t::TOGGLE_MENU, [this](const input::action_arg_t &) {
+	this->bind(input::action_t::TOGGLE_MENU, [this](const input::action_arg_t &) {
 		log::log(MSG(dbg) << "toggle");
 		this->paint_terrain = !this->paint_terrain;
+		return true;
 	});
-	//this->bind(toggle);
-	//this->set_event(input::event_t(SDLK_q), input::action_t::TOGGLE_MENU);
 
 	this->bind(input::action_t::ENABLE_BUILDING_PLACEMENT, [this](const input::action_arg_t &) {
 		log::log(MSG(dbg) << "toggle");
 		this->paint_terrain = !this->paint_terrain;
 	});
 
-
-	input::Action paint(input::action_t::PAINT_TERRAIN, [this](const input::action_arg_t &arg) {
-		log::log(MSG(dbg) << "click");
-		this->on_single_click(0, arg.mouse);
-	});
-	//this->bind(paint);
-
-	input::Action forward(input::action_t::FORWARD, [this](const input::action_arg_t &arg) {
+	this->bind(input::action_t::FORWARD, [this](const input::action_arg_t &arg) {
 		log::log(MSG(dbg) << "wheel");
 		this->on_mouse_wheel(1, arg.mouse);
 	});
-	//this->bind(forward);
 
-	input::Action back(input::action_t::BACK, [this](const input::action_arg_t &arg) {
+	this->bind(input::action_t::BACK, [this](const input::action_arg_t &arg) {
 		log::log(MSG(dbg) << "wheel");
 		this->on_mouse_wheel(-1, arg.mouse);
 	});
-	//this->bind(back);
+
+	this->bind(input::event_class::MOUSE, [this](const input::action_arg_t &arg) {
+		Engine &engine = Engine::get();
+		if (arg.e.cc == input::class_code_t(input::event_class::MOUSE_BUTTON, 1) ||
+			engine.get_input_manager().is_down(input::event_class::MOUSE_BUTTON, 1)) {
+			this->on_single_click(0, arg.mouse);
+			return true;
+		}
+		else if (arg.e.cc == input::class_code_t(input::event_class::MOUSE_BUTTON, 3) ||
+			engine.get_input_manager().is_down(input::event_class::MOUSE_BUTTON, 3)) {
+			this->on_single_click(1, arg.mouse);
+			return true;
+		}
+		return false;
+	});
 }
 
 void EditorMode::render() {
@@ -278,6 +283,13 @@ void EditorMode::render() {
 			txt->sample(bpreview_pos.to_camhud(), engine.current_player);
 			engine.render_text(text_pos, 20, "Type");
 		}
+
+		engine.render_text({0, 180}, 12, "Wheel  -> change item");
+		engine.render_text({0, 160}, 12, "Y      -> change menu");
+		engine.render_text({0, 140}, 12, "M      -> toggle modes");
+	}
+	else {
+		engine.render_text({0, 140}, 12, "Editor Mode requires a game");
 	}
 }
 
@@ -294,7 +306,7 @@ bool EditorMode::on_mouse_wheel(int direction, coord::window) {
 	return true;
 }
 
-bool EditorMode::on_single_click(int, coord::window point) {
+bool EditorMode::on_single_click(int del, coord::window point) {
 	Engine &engine = Engine::get();
 	Terrain *terrain = engine.get_game()->terrain.get();
 
@@ -329,13 +341,15 @@ bool EditorMode::on_single_click(int, coord::window point) {
 
 		// delete any existing unit on the tile
 		if (!chunk->get_data(mousepos_tile)->obj.empty()) {
+			if (del) {
 
-			// get first object currently standing at the clicked position
-			TerrainObject *obj = chunk->get_data(mousepos_tile)->obj[0];
-			log::log(MSG(dbg) << "delete unit with unit id " << obj->unit.id);
-			obj->unit.delete_unit();
+				// delete first object currently standing at the clicked position
+				TerrainObject *obj = chunk->get_data(mousepos_tile)->obj[0];
+				log::log(MSG(dbg) << "delete unit with unit id " << obj->unit.id);
+				obj->unit.delete_unit();
+			}
 
-		} else if (engine.get_game()->get_spec()->producer_count() > 0) {
+		} else if (!del && engine.get_game()->get_spec()->producer_count() > 0) {
 
 			// try creating a unit
 			log::log(MSG(dbg) << "create unit with producer id " << this->editor_current_building);
@@ -375,38 +389,11 @@ GameControl::GameControl(openage::Engine *engine)
 	this->active_mode = modes.front().get();
 	engine->get_input_manager().register_context(this->active_mode);
 
-	// initialize global keybinds
-	// TODO: most can be moved directly to the engine
 	auto &global_input_context = engine->get_input_manager().get_global_context();
-	global_input_context.bind(input::action_t::STOP_GAME, [this](const input::action_arg_t &) {
-		this->engine->stop();
-	});
-	global_input_context.bind(input::action_t::TOGGLE_HUD, [this](const input::action_arg_t &) {
-		this->engine->drawing_huds = !this->engine->drawing_huds;
-	});
-	global_input_context.bind(input::action_t::SCREENSHOT, [this](const input::action_arg_t &) {
-		this->engine->get_screenshot_manager().save_screenshot();
-	});
-	global_input_context.bind(input::action_t::TOGGLE_DEBUG_OVERLAY, [this](const input::action_arg_t &) {
-		this->engine->drawing_debug_overlay = !this->engine->drawing_debug_overlay;
-	});
 	global_input_context.bind(input::action_t::TOGGLE_CONSTRUCT_MODE, [this](const input::action_arg_t &) {
 		this->toggle_mode();
 	});
-	global_input_context.bind(input::action_t::QUICK_SAVE, [this](const input::action_arg_t &) {
-		gameio::save(this->engine->get_game(), "default_save.txt");
-	});
-	global_input_context.bind(input::action_t::QUICK_LOAD, [this](const input::action_arg_t &) {
-		gameio::load(this->engine->get_game(), "default_save.txt");
-	});
-	global_input_context.bind(input::action_t::TOGGLE_PROFILER, [this](const input::action_arg_t &) {
-		if (this->external_profiler.currently_profiling) {
-			this->external_profiler.stop();
-			this->external_profiler.show_results();
-		} else {
-			this->external_profiler.start();
-		}
-	});
+
 }
 
 void GameControl::toggle_mode() {
@@ -418,75 +405,6 @@ void GameControl::toggle_mode() {
 	engine->get_input_manager().register_context(this->active_mode);
 }
 
-bool GameControl::on_input(SDL_Event *e) {
-	Engine &engine = Engine::get();
-
-	// top level input handler
-	switch (e->type) {
-
-	case SDL_MOUSEBUTTONDOWN: {
-		switch (e->button.button) {
-		case SDL_BUTTON_MIDDLE:
-			// activate scrolling
-			SDL_SetRelativeMouseMode(SDL_TRUE);
-			scrolling_active = true;
-
-			// deactivate clicking as long as mousescrolling is active
-			clicking_active = false;
-			break;
-		}
-		break;
-	}
-
-	case SDL_MOUSEBUTTONUP: {
-		// subtract value from window height to get position relative to lower right (0,0).
-
-		switch (e->button.button) {
-
-		case SDL_BUTTON_LEFT:
-			break;
-
-		case SDL_BUTTON_MIDDLE:
-			if (scrolling_active) { // Stop scrolling
-				SDL_SetRelativeMouseMode(SDL_FALSE);
-				scrolling_active = false;
-
-				// reactivate mouse clicks as scrolling is over
-				clicking_active = true;
-			}
-			break;
-
-		case SDL_BUTTON_RIGHT:
-			break;
-
-		} // switch (e->button.button)
-		break;
-	} // case SDL_MOUSEBUTTONUP:
-
-	case SDL_MOUSEMOTION: {
-
-		// update mouse position values
-		coord::window mousepos_window {(coord::pixel_t) e->button.x, (coord::pixel_t) e->button.y};
-		this->mousepos_camgame = mousepos_window.to_camgame();
-		this->mousepos_phys3 = mousepos_camgame.to_phys3();
-		this->mousepos_tile = mousepos_phys3.to_tile3().to_tile();
-
-		// scroll, if middle mouse is being pressed
-		//  SDL_GetRelativeMouseMode() queries sdl for that.
-		if (this->scrolling_active) {
-			engine.move_phys_camera(e->motion.xrel, e->motion.yrel);
-		}
-		break;
-	}
-
-	case SDL_MOUSEWHEEL: {
-		break;
-	}
-
-	} // switch (e->type)
-
-	return true;
-}
 
 bool GameControl::on_drawhud() {
 
