@@ -1,6 +1,5 @@
 // Copyright 2015-2015 the openage authors. See copying.md for legal info.
 
-#include "../log/log.h"
 #include "input_context.h"
 
 namespace openage {
@@ -13,38 +12,45 @@ std::vector<std::string> InputContext::active_binds() const {
 	return result;
 }
 
-void InputContext::bind(const Action &act) {
-	binds.emplace(std::make_pair(act.type, act));
+void InputContext::bind(action_t type, const action_func_t act) {
+	by_type.emplace(std::make_pair(type, act));
 }
 
-void InputContext::bind(const action_t a, const std::function<void()> f) {
-	action_func_t af = [f](const action_arg_t &) { f(); };
-	binds.emplace(std::make_pair(a, Action(a, af)));
+void InputContext::bind(const Event &ev, const action_func_t act) {
+	by_event.emplace(std::make_pair(ev, act));
 }
 
-void InputContext::set_event(const event_t &e, const action_id_t &type) {
-	events.emplace(std::make_pair(e, type));
+void InputContext::bind(event_class ec, const action_func_t act) {
+	by_class.emplace(std::make_pair(ec, act));
 }
 
-void InputContext::set_event(const event_set_t &es, const action_id_t &type) {
-	for (auto &e: es) {
-		this->set_event(e, type);
-	}
-}
+bool InputContext::execute_if_bound(const action_arg_t &arg) {
 
-bool InputContext::execute_if_bound(const action_t &a, const action_arg_t &arg) {
-	action_id_t action_id = a;
-	auto event = this->events.find(arg.e);
-	if (event != this->events.end()) {
-		log::log(MSG(dbg) << "key override");
-		action_id = event->second;
+	// arg type hints are highest priority
+	for (auto &h : arg.hints) {
+		auto action = this->by_type.find(h);
+		if (action != this->by_type.end()) {
+			action->second(arg);
+			return true;
+		}
 	}
 
-	auto f = this->binds.find(action_id);
-	if (f != this->binds.end()) {
-		f->second.do_action(arg);
+	// specific event mappings
+	auto action = this->by_event.find(arg.e);
+	if (action != this->by_event.end()) {
+		action->second(arg);
 		return true;
 	}
+
+	// check all possible class mappings
+	for (auto &c : arg.e.cc.get_classes()) {
+		auto action = this->by_class.find(c);
+		if (action != this->by_class.end()) {
+			action->second(arg);
+			return true;
+		}
+	}
+
 	return false;
 }
 

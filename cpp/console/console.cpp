@@ -64,8 +64,8 @@ void Console::register_to_engine(Engine *engine) {
 
 	// Bind the console toggle key globally
 	auto &input = engine->get_input_manager();
-	input.get_global_keybind_context()
-	        .bind(input::action_t::TOGGLE_CONSOLE, [this, &input]() {
+	input.get_global_context()
+	        .bind(input::action_t::TOGGLE_CONSOLE, [this, &input](const input::action_arg_t &) {
 		if (!visible) { // Show the console, add keybinds
 			visible = true;
 			input.override_context(&this->input_context);

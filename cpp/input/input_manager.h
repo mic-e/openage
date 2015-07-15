@@ -16,6 +16,8 @@
 namespace openage {
 namespace input {
 
+using binding_map_t = std::unordered_multimap<Event, action_t, event_hash>;
+
 class InputManager : public openage::InputHandler {
 
 public:
@@ -25,7 +27,7 @@ public:
 	 * returns the global keybind context.
 	 * actions bound here will be retained even when override_context is called.
 	 */
-	InputContext &get_global_keybind_context();
+	InputContext &get_global_context();
 
 	/**
 	 * register a hotkey context, and override old keybinds.
@@ -47,29 +49,32 @@ public:
 	 * first checks whether an action is bound to it.
 	 * if it is, look for an handler to execute that handler.
 	 */
-	void press(event_t k);
+	void trigger(const Event &e);
 
 	/**
 	 * sets the state of a specific key
 	 */
-	void set_key_state(SDL_Keycode k, SDL_Keymod mod, bool is_down);
+	void set_state(const Event &ev, bool is_down);
 
 	/**
 	 * query stored pressing stat for a key.
 	 * @return true when the key is pressed, false else.
 	 */
-	bool is_key_down(SDL_Keycode k);
+	bool is_down(SDL_Keycode k);
 
 	/**
 	 * Checks whether a key modifier is held down.
 	 */
-	bool is_keymod_down(SDL_Keymod mod) const;
+	bool is_mod_down(SDL_Keymod mod) const;
+
 
 	bool on_input(SDL_Event *e) override;
 
 private:
+	modset_t get_mod() const;
+
 	InputContext global_hotkeys;
-	std::unordered_map<event_t, action_t, event_hash> keys;
+	binding_map_t keys;
 	std::stack<std::vector<InputContext *>> contexts;
 
 	/**
@@ -78,18 +83,18 @@ private:
 	 * a true value means the key is currently pressed,
 	 * false indicates the key is untouched.
 	 */
-	std::unordered_map<SDL_Keycode, bool> key_states;
+	std::unordered_map<class_code_t, bool, class_code_hash> states;
+
+	/**
+	 * Current key modifiers.
+	 * Included ALL modifiers including num lock and caps lock.
+	 */
+	modset_t keymod;
 
 	/**
 	 * current mouse position
 	 */
 	coord::window mouse_position;
-
-	/*
-	 * Current key modifiers.
-	 * Included ALL modifiers including num lock and caps lock.
-	 */
-	SDL_Keymod keymod;
 
 	/**
 	 * used key modifiers to check for.

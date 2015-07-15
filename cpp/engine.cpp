@@ -302,16 +302,16 @@ void Engine::loop() {
 
 			input::InputManager &input = this->get_input_manager();
 
-			if (input.is_key_down(SDLK_LEFT)) {
+			if (input.is_down(SDLK_LEFT)) {
 				mov_x = -cam_movement_speed_keyboard;
 			}
-			if (input.is_key_down(SDLK_RIGHT)) {
+			if (input.is_down(SDLK_RIGHT)) {
 				mov_x = cam_movement_speed_keyboard;
 			}
-			if (input.is_key_down(SDLK_DOWN)) {
+			if (input.is_down(SDLK_DOWN)) {
 				mov_y = cam_movement_speed_keyboard;
 			}
-			if (input.is_key_down(SDLK_UP)) {
+			if (input.is_down(SDLK_UP)) {
 				mov_y = -cam_movement_speed_keyboard;
 			}
 			this->move_phys_camera(mov_x, mov_y, (float) this->lastframe_duration_nsec() / 1e6);

@@ -15,18 +15,11 @@ CreateMode::CreateMode(Engine &engine)
 	this->settings.number_of_players = 8;
 	this->settings.spec = std::make_shared<GameSpec>(&this->assetmanager);
 
-
-	input::Action start(input::action_t::START_GAME, [this](const input::action_arg_t &arg) {
+	this->bind(input::action_t::START_GAME, [this](const input::action_arg_t &) {
 		log::log(MSG(dbg) << "start game");
 		Engine &engine = Engine::get();
 		engine.start_game(this->settings);
 	});
-	this->bind(start);
-
-	// multiple events
-	this->set_event(input::event_t(SDLK_a), input::action_t::START_GAME);
-	this->set_event(input::event_t(SDLK_d), input::action_t::START_GAME);
-	this->set_event(input::event_t(input::event_source_t::MOUSE, 0), input::action_t::START_GAME);
 }
 
 void CreateMode::render() {
@@ -44,22 +37,6 @@ void CreateMode::render() {
 	engine.render_text({0, 140}, 20, "Click to create new game");
 }
 
-bool CreateMode::on_mouse_wheel(int direction, coord::window point) {
-	return false;
-}
-
-bool CreateMode::on_single_click(int button, coord::window point) {
-	return true;
-}
-
-bool CreateMode::on_drag_start(int button, coord::window point) {
-	return false;
-}
-
-bool CreateMode::on_drag_end(int button, coord::window point) {
-	return false;
-}
-
 ActionMode::ActionMode()
 	:
 	use_set_ability{false},
@@ -67,7 +44,7 @@ ActionMode::ActionMode()
 
 	// this->engine->register_drawhud_action(&this->selection);
 
-	this->bind(input::action_t::TRAIN_OBJECT, [this]() {
+	this->bind(input::action_t::TRAIN_OBJECT, [this](const input::action_arg_t &) {
 		// attempt to train editor selected object
 		if (this->type_focus) {
 			Engine &engine = Engine::get();
@@ -76,21 +53,21 @@ ActionMode::ActionMode()
 			this->selection.all_invoke(cmd);
 		}
 	});
-	this->bind(input::action_t::ENABLE_BUILDING_PLACEMENT, [this]() {
+	this->bind(input::action_t::ENABLE_BUILDING_PLACEMENT, [this](const input::action_arg_t &) {
 		// this->building_placement = true;
 	});
-	this->bind(input::action_t::DISABLE_SET_ABILITY, [this]() {
+	this->bind(input::action_t::DISABLE_SET_ABILITY, [this](const input::action_arg_t &) {
 		this->use_set_ability = false;
 	});
-	this->bind(input::action_t::SET_ABILITY_MOVE, [this]() {
+	this->bind(input::action_t::SET_ABILITY_MOVE, [this](const input::action_arg_t &) {
 		this->use_set_ability = true;
 		this->ability = ability_type::move;
 	});
-	this->bind(input::action_t::SET_ABILITY_GATHER, [this]() {
+	this->bind(input::action_t::SET_ABILITY_GATHER, [this](const input::action_arg_t &) {
 		this->use_set_ability = true;
 		this->ability = ability_type::gather;
 	});
-	this->bind(input::action_t::SPAWN_VILLAGER, [this]() {
+	this->bind(input::action_t::SPAWN_VILLAGER, [this](const input::action_arg_t &) {
 		Engine &engine = Engine::get();
 		GameSpec *spec = engine.get_game()->get_spec();
 		if (spec->producer_count() > 0) {
@@ -100,18 +77,18 @@ ActionMode::ActionMode()
 			//engine.get_game()->placed_units.new_unit(type, *engine.player_focus(), mousepos_tile.to_phys2().to_phys3());
 		}
 	});
-	this->bind(input::action_t::KILL_UNIT, [this]() {
+	this->bind(input::action_t::KILL_UNIT, [this](const input::action_arg_t &) {
 		selection.kill_unit();
 	});
 
 	// Villager build commands
 	// TODO place this into separate building menus instead of global hotkeys
 	auto bind_building_key = [this](input::action_t action, int building, int military_building) {
-		this->bind(action, [this, building, military_building]() {
+		this->bind(action, [this, building, military_building](const input::action_arg_t &) {
 			if (this->selection.contains_builders()) {
 				//this->building_placement = true;
 				Engine &engine = Engine::get();
-				if (engine.get_input_manager().is_keymod_down(KMOD_LCTRL)) {
+				if (engine.get_input_manager().is_mod_down(KMOD_LCTRL)) {
 					//this->type_focus = military_building;
 				} else {
 					//this->type_focus = building;
@@ -127,7 +104,7 @@ ActionMode::ActionMode()
 
 	// Switching between players with the 1-8 keys
 	auto bind_player_switch = [this](input::action_t action, int player) {
-		this->bind(action, [this, player]() {
+		this->bind(action, [this, player](const input::action_arg_t &) {
 			Engine &engine = Engine::get();
 			engine.current_player = player;
 			this->selection.clear();
@@ -189,11 +166,11 @@ void ActionMode::render() {
 	}
 }
 
-bool ActionMode::on_mouse_wheel(int direction, coord::window point) {
+bool ActionMode::on_mouse_wheel(int, coord::window) {
 	return false;
 }
 
-bool ActionMode::on_single_click(int button, coord::window point) {
+bool ActionMode::on_single_click(int, coord::window point) {
 	if (this->type_focus) {
 
 		// confirm building placement with left click
@@ -222,7 +199,7 @@ bool ActionMode::on_single_click(int button, coord::window point) {
 
 	return false;
 }
-bool ActionMode::on_drag_start(int button, coord::window point) {
+bool ActionMode::on_drag_start(int, coord::window) {
 
 	//selection.drag_begin(mousepos_camgame);
 	//dragging_active = true;
@@ -230,7 +207,7 @@ bool ActionMode::on_drag_start(int button, coord::window point) {
 	return false;
 }
 
-bool ActionMode::on_drag_end(int button, coord::window point) {
+bool ActionMode::on_drag_end(int, coord::window) {
 
 	//selection.drag_update(mousepos_camgame);
 
@@ -248,25 +225,36 @@ EditorMode::EditorMode()
 	building_placement{false} {
 
 
-	input::Action toggle(input::action_t::TOGGLE_MENU, [this](const input::action_arg_t &arg) {
+	input::Action toggle(input::action_t::TOGGLE_MENU, [this](const input::action_arg_t &) {
 		log::log(MSG(dbg) << "toggle");
 		this->paint_terrain = !this->paint_terrain;
 	});
-	this->bind(toggle);
-	this->set_event(input::event_t(SDLK_q), input::action_t::TOGGLE_MENU);
+	//this->bind(toggle);
+	//this->set_event(input::event_t(SDLK_q), input::action_t::TOGGLE_MENU);
 
-	this->bind(input::action_t::ENABLE_BUILDING_PLACEMENT, [this]() {
+	this->bind(input::action_t::ENABLE_BUILDING_PLACEMENT, [this](const input::action_arg_t &) {
 		log::log(MSG(dbg) << "toggle");
 		this->paint_terrain = !this->paint_terrain;
 	});
 
 
-	input::Action start(input::action_t::START_GAME, [this](const input::action_arg_t &arg) {
+	input::Action paint(input::action_t::PAINT_TERRAIN, [this](const input::action_arg_t &arg) {
 		log::log(MSG(dbg) << "click");
 		this->on_single_click(0, arg.mouse);
 	});
-	this->bind(start);
-	this->set_event(input::event_t(input::event_source_t::MOUSE, 0), input::action_t::START_GAME);
+	//this->bind(paint);
+
+	input::Action forward(input::action_t::FORWARD, [this](const input::action_arg_t &arg) {
+		log::log(MSG(dbg) << "wheel");
+		this->on_mouse_wheel(1, arg.mouse);
+	});
+	//this->bind(forward);
+
+	input::Action back(input::action_t::BACK, [this](const input::action_arg_t &arg) {
+		log::log(MSG(dbg) << "wheel");
+		this->on_mouse_wheel(-1, arg.mouse);
+	});
+	//this->bind(back);
 }
 
 void EditorMode::render() {
@@ -293,20 +281,20 @@ void EditorMode::render() {
 	}
 }
 
-bool EditorMode::on_mouse_wheel(int direction, coord::window point) {
+bool EditorMode::on_mouse_wheel(int direction, coord::window) {
 	Engine &engine = Engine::get();
 	GameSpec *spec = engine.get_game()->get_spec();
 
 	// modify selected item
-	if (engine.get_input_manager().is_keymod_down(KMOD_LCTRL) && spec->producer_count() > 0) {
-		editor_current_building = util::mod<ssize_t>(editor_current_building + direction, spec->producer_count());
-	} else {
+	if (this->paint_terrain) {
 		editor_current_terrain = util::mod<ssize_t>(editor_current_terrain + direction, spec->get_terrain_meta()->terrain_id_count);
+	} else if (spec->producer_count() > 0) {
+		editor_current_building = util::mod<ssize_t>(editor_current_building + direction, spec->producer_count());
 	}
 	return true;
 }
 
-bool EditorMode::on_single_click(int button, coord::window point) {
+bool EditorMode::on_single_click(int, coord::window point) {
 	Engine &engine = Engine::get();
 	Terrain *terrain = engine.get_game()->terrain.get();
 
@@ -360,11 +348,11 @@ bool EditorMode::on_single_click(int button, coord::window point) {
 	return false;
 }
 
-bool EditorMode::on_drag_start(int button, coord::window point) {
+bool EditorMode::on_drag_start(int, coord::window) {
 	return false;
 }
 
-bool EditorMode::on_drag_end(int button, coord::window point) {
+bool EditorMode::on_drag_end(int, coord::window) {
 	return false;
 }
 
@@ -388,29 +376,30 @@ GameControl::GameControl(openage::Engine *engine)
 	engine->get_input_manager().register_context(this->active_mode);
 
 	// initialize global keybinds
-	auto &global_input_context = engine->get_input_manager().get_global_keybind_context();
-	global_input_context.bind(input::action_t::STOP_GAME, [this]() {
+	// TODO: most can be moved directly to the engine
+	auto &global_input_context = engine->get_input_manager().get_global_context();
+	global_input_context.bind(input::action_t::STOP_GAME, [this](const input::action_arg_t &) {
 		this->engine->stop();
 	});
-	global_input_context.bind(input::action_t::TOGGLE_HUD, [this]() {
+	global_input_context.bind(input::action_t::TOGGLE_HUD, [this](const input::action_arg_t &) {
 		this->engine->drawing_huds = !this->engine->drawing_huds;
 	});
-	global_input_context.bind(input::action_t::SCREENSHOT, [this]() {
+	global_input_context.bind(input::action_t::SCREENSHOT, [this](const input::action_arg_t &) {
 		this->engine->get_screenshot_manager().save_screenshot();
 	});
-	global_input_context.bind(input::action_t::TOGGLE_DEBUG_OVERLAY, [this]() {
+	global_input_context.bind(input::action_t::TOGGLE_DEBUG_OVERLAY, [this](const input::action_arg_t &) {
 		this->engine->drawing_debug_overlay = !this->engine->drawing_debug_overlay;
 	});
-	global_input_context.bind(input::action_t::TOGGLE_CONSTRUCT_MODE, [this]() {
+	global_input_context.bind(input::action_t::TOGGLE_CONSTRUCT_MODE, [this](const input::action_arg_t &) {
 		this->toggle_mode();
 	});
-	global_input_context.bind(input::action_t::QUICK_SAVE, [this]() {
+	global_input_context.bind(input::action_t::QUICK_SAVE, [this](const input::action_arg_t &) {
 		gameio::save(this->engine->get_game(), "default_save.txt");
 	});
-	global_input_context.bind(input::action_t::QUICK_LOAD, [this]() {
+	global_input_context.bind(input::action_t::QUICK_LOAD, [this](const input::action_arg_t &) {
 		gameio::load(this->engine->get_game(), "default_save.txt");
 	});
-	global_input_context.bind(input::action_t::TOGGLE_PROFILER, [this]() {
+	global_input_context.bind(input::action_t::TOGGLE_PROFILER, [this](const input::action_arg_t &) {
 		if (this->external_profiler.currently_profiling) {
 			this->external_profiler.stop();
 			this->external_profiler.show_results();
@@ -451,10 +440,6 @@ bool GameControl::on_input(SDL_Event *e) {
 
 	case SDL_MOUSEBUTTONUP: {
 		// subtract value from window height to get position relative to lower right (0,0).
-		coord::window mousepos_window {(coord::pixel_t) e->button.x, (coord::pixel_t) e->button.y};
-
-		// pass to the active mode
-		this->active_mode->on_single_click(e->button.button, mousepos_window);
 
 		switch (e->button.button) {
 
@@ -495,8 +480,6 @@ bool GameControl::on_input(SDL_Event *e) {
 	}
 
 	case SDL_MOUSEWHEEL: {
-		coord::window mousepos_window {(coord::pixel_t) e->button.x, (coord::pixel_t) e->button.y};
-		this->active_mode->on_mouse_wheel(e->wheel.y, mousepos_window);
 		break;
 	}
 

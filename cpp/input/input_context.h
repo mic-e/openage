@@ -25,40 +25,48 @@ public:
 	 */
 	std::vector<std::string> active_binds() const;
 
-	void bind(const Action &act);
+	/**
+	 * bind a specific action idetifier
+	 * this is the highest matching priority
+	 */
+	void bind(action_t type, const action_func_t act);
 
 	/**
-	 * bind a function to an action.
-	 * TODO: remove this function
+	 * bind a specific event
+	 * this is the second matching priority
 	 */
-	void bind(const action_t a, const std::function<void()> f);
+	void bind(const Event &ev, const action_func_t act);
 
 	/**
-	 * addtional events to respond to
+	 * bind all events of a specific class
+	 * this is the lowest matching priority
 	 */
-	void set_event(const event_t &e, const action_id_t &type);
-
-	/**
-	 * connect a set of events to an action
-	 */
-	void set_event(const event_set_t &es, const action_id_t &type);
+	void bind(event_class ec, const action_func_t act);
 
 	/**
 	 * lookup an action. If it is bound, execute it.
 	 * @return true when the action is executed, false else.
 	 */
-	bool execute_if_bound(const action_t &a, const action_arg_t &e);
+	bool execute_if_bound(const action_arg_t &e);
+
 private:
 
 	/**
-	 * TODO: adds context specific tags to event arg
+	 * map specific hints
 	 */
-	std::unordered_map<event_t, action_id_t, event_hash> events;
+	std::unordered_map<action_t, action_func_t, action_hash> by_type;
 
 	/**
-	 * action to function map
+	 * map specific overriding events
 	 */
-	std::unordered_map<action_id_t, Action, action_hash> binds;
+	std::unordered_map<Event, action_func_t, event_hash> by_event;
+
+	/**
+	 * event to action map
+	 * event_class as key, to ensure all events can be mapped
+	 */
+	std::unordered_map<event_class, action_func_t, event_class_hash> by_class;
+
 };
 
 } //namespace input

@@ -22,12 +22,6 @@ class OutputMode : public input::InputContext {
 public:
 	virtual void render() = 0;
 
-	// input handling
-	virtual bool on_mouse_wheel(int direction, coord::window point) = 0;
-	virtual bool on_single_click(int button, coord::window point) = 0;
-	virtual bool on_drag_start(int button, coord::window point) = 0;
-	virtual bool on_drag_end(int button, coord::window point) = 0;
-
 };
 
 /**
@@ -38,11 +32,6 @@ public:
 	CreateMode(Engine &engine);
 
 	void render() override;
-
-	bool on_mouse_wheel(int direction, coord::window point) override;
-	bool on_single_click(int button, coord::window point) override;
-	bool on_drag_start(int button, coord::window point) override;
-	bool on_drag_end(int button, coord::window point) override;
 
 private:
 	game_settings settings;
@@ -61,10 +50,10 @@ public:
 
 	void render() override;
 
-	bool on_mouse_wheel(int direction, coord::window point) override;
-	bool on_single_click(int button, coord::window point) override;
-	bool on_drag_start(int button, coord::window point) override;
-	bool on_drag_end(int button, coord::window point) override;
+	bool on_mouse_wheel(int direction, coord::window point);
+	bool on_single_click(int button, coord::window point);
+	bool on_drag_start(int button, coord::window point);
+	bool on_drag_end(int button, coord::window point);
 
 private:
 
@@ -98,10 +87,10 @@ public:
 
 	void render() override;
 
-	bool on_mouse_wheel(int direction, coord::window point) override;
-	bool on_single_click(int button, coord::window point) override;
-	bool on_drag_start(int button, coord::window point) override;
-	bool on_drag_end(int button, coord::window point) override;
+	bool on_mouse_wheel(int direction, coord::window point);
+	bool on_single_click(int button, coord::window point);
+	bool on_drag_start(int button, coord::window point);
+	bool on_drag_end(int button, coord::window point);
 
 private:
 
